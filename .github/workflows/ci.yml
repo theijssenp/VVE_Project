@@ -1,0 +1,35 @@
+name: CI — VvE-monorepo
+
+# F01: kwaliteitsketen blokkerend in CI (lint, test, build).
+# Node 22 (spec §7.1 / F01-item 8). Lokaal hoeft hij niet te draaien; de syntax telt.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  quality:
+    name: lint · test · build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install (npm ci)
+        run: npm ci
+
+      - name: Lint (blokkerend)
+        run: npm run lint
+
+      - name: Test
+        run: npm run test
+
+      - name: Build
+        run: npm run build

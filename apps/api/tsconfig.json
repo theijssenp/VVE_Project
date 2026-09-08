@@ -1,0 +1,23 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "outDir": "dist",
+    "rootDir": ".",
+    "types": ["node", "reflect-metadata"],
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "paths": {
+      "@vve/contract": ["../../packages/contract/src/index.ts"],
+      "@vve/contract/*": ["../../packages/contract/src/*"],
+      "@vve/domein": ["../../packages/domein/src/index.ts"],
+      "@vve/domein/*": ["../../packages/domein/src/*"]
+    }
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts", "vitest.config.ts"],
+  "references": [
+    {
+      "path": "../../packages/contract"
+    }
+  ]
+}

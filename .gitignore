@@ -6,3 +6,10 @@ coverage/
 *.log
 .DS_Store
 storage/
+
+# tsc -b bouwinformatie (project references) en linter-cache
+*.tsbuildinfo
+.eslintcache
+
+# Orchestratie-lagen (opdrachten, logboeken) — bewust buiten de repo
+.orchestratie/

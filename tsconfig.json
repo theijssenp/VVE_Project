@@ -1,0 +1,4 @@
+{
+  "files": [],
+  "references": [{ "path": "./packages/domein" }, { "path": "./packages/contract" }, { "path": "./apps/api" }]
+}

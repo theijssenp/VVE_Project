@@ -1,0 +1,12 @@
+{
+  "name": "@vve/app",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Ionic 8 + Angular client (PWA, later Capacitor). Blok F11 scaffoldt dit; alleen een geldige workspace-map is in F01 vereist (spec §7.2 / F01-item 2).",
+  "scripts": {
+    "build": "echo \"apps/app: nog niet gescaffoldt (F11); geen build in F01.\""
+  },
+  "dependencies": {
+    "@vve/contract": "*"
+  }
+}

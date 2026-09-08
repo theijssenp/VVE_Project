@@ -1,0 +1,19 @@
+# .prettierignore — één pattern per regel, .gitignore-stijl.
+#
+# Baseline-documenten die niet door Prettier mogen worden aangepast (Prettier kan
+# WERKPLAN.md- en VVE_APPLICATIE_SPEC.md-tabellen herschrijven en daarmee ruison
+# creëren aan de spec).
+
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+.github/
+
+# Baselines — Prettier mag de format niet aanpassen
+VVE_APPLICATIE_SPEC.md
+WERKPLAN.md
+.orchestratie/
+
+# Prettier's eigen config is al netjes; laten we hem niet formatteren als code.
+.prettierrc.json

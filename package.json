@@ -1,0 +1,33 @@
+{
+  "name": "vve-monorepo",
+  "version": "0.0.0",
+  "private": true,
+  "description": "VvE-beheerapplicatie — monorepo (NestJS + PostgreSQL + Ionic). Zie VVE_APPLICATIE_SPEC.md en WERKPLAN.md.",
+  "workspaces": [
+    "apps/api",
+    "apps/app",
+    "packages/domein",
+    "packages/contract"
+  ],
+  "scripts": {
+    "build": "tsc -b",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.0",
+    "@types/node": "^22.10.0",
+    "@typescript-eslint/eslint-plugin": "^8.57.0",
+    "@typescript-eslint/parser": "^8.57.0",
+    "eslint": "^9.39.0",
+    "prettier": "^3.8.0",
+    "typescript": "^5.9.0",
+    "typescript-eslint": "^8.57.0",
+    "vitest": "^3.2.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
