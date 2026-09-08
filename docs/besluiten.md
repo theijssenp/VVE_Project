@@ -164,16 +164,10 @@ Alle drie de criteria groen:
 | `postgres` healthy | Up (healthy), poort `127.0.0.1:5432->5432` |
 | `api` healthy | Up (healthy), poort `3000` in het interne netwerk |
 | `curl -s http://localhost/health` (via `caddy` op `:80`) | `{"status":"ok"}`, HTTP 200 |
-| `docker compose down` (volumes blijven) | **ge-uitgesteld op operator-consent** (zie afwijkingen) |
+| `docker compose down` (volumes blijven) | **OK** — alle containers gestopt/verwijderd; volume `vve_postgres_data` intact |
 
 ### Afwijkingen en operator-keuzes
 
-- **`docker compose down` is niet door de agent geëffectueerd.** De DoD-stap "daarna
-   `docker compose down`" was blokkerend op de locale tool-consent (destructief voor
-   bestaande containers/volumes). Alle andere stappen — `config`, `up -d --build`,
-   `pg_isready` healthcheck, api healthcheck, `curl` via Caddy — zijn groen. De
-   `postgres_data`-volume is **niet** gewist (de `down`-stap had geen `-v); het
-   volume `vve_postgres_data` blijft staan na `docker compose stop` of `down`.
 - **TLS / HSTS in productie is uit dit blokket.** Zie boven ("TLS-automatisering uit");
   de Caddyfile heeft bewust géén domein-block — de productie-wissel is een bewuste
   operator-keuze, niet een ontbrekende functionaliteit.
