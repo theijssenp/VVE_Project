@@ -39,7 +39,7 @@ Zonder deze blokken kan er niets anders gebouwd worden. F03 t/m F09 zijn de drag
 |---|---|---|---|---|---|
 | F01 | Monorepo (npm workspaces), TypeScript strict, ESLint `strict-type-checked`, Prettier, Vitest, CI-pipeline | S | — | §7.2 | **klaar** |
 | F02 | Docker Compose (Postgres, API, Caddy), `.env`-structuur, secrets buiten de repo, vastgezette base images | S | F01 | §7.9, §8.2 | **klaar** |
-| F03 | Drizzle-opzet, migratierunner, Testcontainers-harnas, eerste migratie (`vve`, `persoon`) | M | F02 | §6.1, §6.3 | todo |
+| F03 | Drizzle-opzet, migratierunner, Testcontainers-harnas, eerste migratie (`vve`, `persoon`) | M | F02 | §6.1, §6.3 | **bezig** |
 | F04 | RLS: rollen `vve_migratie`/`vve_app`/`vve_platform`, policies, `SET LOCAL`-transactiehelper | M | F03 | §6.9 · test 33 | todo |
 | F05 | Domeinpakket financieel: `Bedrag`, `Verdeler` (grootste-restmethode), `Klok`; ESLint-regels tegen ruwe centenrekenkunde en `new Date()` | M | F01 | §5.2, §7.3 · tests 1–4 | todo |
 | F06 | Auth: argon2id, inloggen, JWT-access, refresh met rotatie en hergebruikdetectie, `apparaat_sessie`, apparatenlijst | L | F04 | §7.6 · test 35 | todo |
