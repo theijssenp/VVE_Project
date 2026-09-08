@@ -1,0 +1,22 @@
+# Caddy — minimale reverse proxy voor de VvE-omgeving (blok F02, spec §7.9).
+#
+# LOKAAL: HTTP op poort 80. TLS-automatisering is bewust uitgezet in dit blokket
+# (geen domein/letsencrypt-lokaal; de productie-keuze staat in docs/besluiten.md).
+#
+# Alle verkeer gaat naar de api-service binnen het compose-netwerk op poort 3000.
+# Caddy is de enige poort die naar buiten luistert; de api heeft géén host-mapping
+# en postgres is op 127.0.0.1 alleen (spec §7.9: "niet aan het internet blootgesteld").
+
+:80 {
+   log {
+      output file /var/log/caddy/app.log
+    format json
+   }
+
+    # Reverse proxy naar de API (spec §7.9).
+   reverse_proxy api:3000 {
+      header_up X-Real-IP {remote_host}
+      header_up X-Forwarded-For {remote_host}
+      header_up X-Forwarded-Proto {scheme}
+    }
+}

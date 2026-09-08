@@ -1,0 +1,92 @@
+# infra/docker-compose.yml — productie-omgevingsskelet (blok F02, spec §7.9).
+#
+# Drie services: postgres (data), api (NestJS), caddy (reverse proxy).
+# Alle base images zijn OP DIGEST vastgezet (niet :latest / floating tag, spec §8.2).
+# Zie docs/besluiten.md -> F02 voor de digests en de onderbouwing.
+#
+# Gebruik (zie infra/README.md):
+#   cp .env.voorbeeld .env && chmod 600 .env
+#   docker compose -f infra/docker-compose.yml config
+#   docker compose -f infra/docker-compose.yml up -d
+#   curl -s http://localhost/health     # -> {"status":"ok"} via caddy
+#   docker compose -f infra/docker-compose.yml down
+#
+# Platform: de digests gelden voor linux/amd64 (CI draait op ubuntu-latest).
+# Lokale ARM64-digests staan in docs/besluiten.md (zie infra/README.md).
+
+name: vve
+
+services:
+
+   postgres:
+      image: postgres:16-alpine@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685
+      env_file:
+      - path: ../.env
+        required: false
+      volumes:
+      - postgres_data:/var/lib/postgresql/data
+      environment:
+         POSTGRES_USER: ${POSTGRES_USER:-vve}
+         POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-lokal}
+         POSTGRES_DB: ${POSTGRES_DB:-vve}
+      healthcheck:
+         test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+         interval: 10s
+         timeout: 5s
+         retries: 5
+         start_period: 10s
+      ports:
+      - "${POSTGRES_PORT_MAPPING:-127.0.0.1:5432:5432}"
+      restart: unless-stopped
+      networks:
+      - vve_net
+
+   api:
+      build:
+         context: ..
+         dockerfile: infra/api.Dockerfile
+      env_file:
+      - path: ../.env
+        required: false
+      environment:
+         NODE_ENV: ${NODE_ENV:-production}
+         PORT: ${API_PORT:-3000}
+         PGHOST: postgres
+         PGPORT: "5432"
+         PGUSER: ${POSTGRES_USER:-vve}
+         PGDATABASE: ${POSTGRES_DB:-vve}
+      depends_on:
+         postgres:
+            condition: service_healthy
+      healthcheck:
+         test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:'+process.env.PORT+'/health').then(r=>r.json().then(d=>{if(d.status!=='ok')process.exit(1)}).catch(()=>process.exit(1))).catch(()=>process.exit(1))\""]
+         interval: 30s
+         timeout: 5s
+         retries: 3
+         start_period: 15s
+      restart: unless-stopped
+      networks:
+      - vve_net
+
+   caddy:
+      image: caddy:2-alpine@sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648
+      env_file:
+      - path: ../.env
+        required: false
+      ports:
+      - "80:80"
+      volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      depends_on:
+         api:
+            condition: service_healthy
+      restart: unless-stopped
+      networks:
+      - vve_net
+
+volumes:
+   postgres_data: {}
+
+networks:
+   vve_net:
+      driver: bridge

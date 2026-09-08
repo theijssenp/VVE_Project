@@ -73,5 +73,113 @@ Enforcement van de pure-TS-regel (spec §7.2 "niet met goede voornemens"):
   maar dat betekent dat `build` vóór `lint` moet draaien. Met `paths` typecheckt de linter
   direct tegen de bron — de "npm ci, lint, test, build" CI-ordening slaagt dan ook.
 - **`root build` = `tsc -b` zonder argument.** Dit bouwt alle projecten uit de root-
-  `tsconfig.json` `references` (domein, contract, api, in volgorde). Dat is beter dan een
-  hard-codd `tsc -b apps/api` die domein zou overslaan.
+ `tsconfig.json` `references` (domein, contract, api, in volgorde). Dat is beter dan een
+hard-codd `tsc -b apps/api` die domein zou overslaan.
+
+---
+
+## F02 — Docker Compose-fundament (08-09-2026)
+
+Productie-omgevingsskelet conform spec §7.9 (Draaien en beheren) en §8.2 (toeleveringsketen).
+Drie services: `postgres`, `api`, `caddy`. Dit blokket levert géén databasecode of migraties (F03).
+
+### Base images op digest (spec §8.2: "vastgezette base image (digest, geen `:latest`)")
+
+Opgehaald met `docker inspect --format '{{.RepoDigests}}'` op 08-09-2026 op deze machine
+(Docker Desktop op macOS, Apple Silicon / arm64). Deze digests gelden voor de multi-platform
+manifest; docker selecteert per host het juiste platform-archief:
+
+| Image | Tag | Digest (manifest) |
+|---|---|---|
+| `postgres` | `16-alpine` | `sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685` |
+| `node` | `22-alpine` | `sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32` |
+| `caddy` | `2-alpine` | `sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648` |
+
+`node:22-alpine` is de base van zowel de `builder`- als de `runtime`-stage in
+`infra/api.Dockerfile`. De digests zijn **manifest-list digests** — op een `linux/amd64`
+CI-machine (`ubuntu-latest` in de CI) pakt Docker automatisch het AMD64-archief uit dezelfde
+manifest, dus één digest dekt beide platformen.
+
+### Keuze: Postgres niet publiek blootgesteld
+
+Spec §7.9 vereist dat Postgres **niet aan het internet**. Realisatie:
+- De enige poortmapping staat op **`127.0.0.1:5432:5432`** (default via
+  `${POSTGRES_PORT_MAPPING:-127.0.0.1:5432:5432}`). Geen `0.0.0.0`.
+- In productie zet de operator `POSTGRES_PORT_MAPPING=` leeg (in `.env`), zodat er op de
+  host géén mapping is en Postgres alleen binnen het compose-netwerk (`vve_vve_net`)
+  bereikbaar is door de `api`-service.
+- De `api`-service heeft géén host-poort; `caddy` is de **enige** poort die naar buiten
+  luistert (`0.0.0.0:80`).
+
+### Keuze: lokaal HTTP op 80, TLS-automatisering uit
+
+De opdracht zegt: "Voor lokaal draaien mag dat HTTP op poort 80 zijn; TLS-automatisering
+voor productie noteer je als keuze (niet nu activeren)." De `infra/Caddyfile` werkt daarom
+als pure `reverse_proxy api:3000` op `:80`. Voor productie zou de Caddyfile een domein-block
+met automatische `https` (Letsencrypt, `caddy:2-alpine` doet dit vanzelf) krijgen; die
+wissel is bewus uit dit blokket. De HSTS-header (spec §8.2) hangt daaraan vast en wordt
+dus mee geactiveerd wanneer de productie-domein-block toegevoegd wordt.
+
+### Keuze: `env_file: ../.env` met `required: false`
+
+De `api`/`postgres`/`caddy`-services krijgen elk een `env_file: ../.env` met
+`required: false`. Twee-reden:
+- **Doel DoD**: `docker compose config` moet geldig zijn zonder dat de operator nog een
+    `.env` heeft aangemaakt (de repo draait in CI zonder `.env`). `required: false`
+    voorkomt dat een ontbrekend bestand de interpolatie stopt.
+- **Doel productie**: de `.env` (met echte secrets) wordt door de operator lokaal aangemaakt
+    via `cp .env.voorbeeld .env && chmod 600 .env` en is **buiten** git (`.gitignore`).
+    Zolang de `.env` aanwezig is, overschrijft de daarin gezette `POSTGRES_PASSWORD` (en
+    de overige secrets) de placeholder-defaults in de compose-file. De compose-file
+    bevat **géén echte secrets** (spec §8.2: "Geen geheimen in de repository").
+
+De `:?`-validatie (die de `.env` verplicht zou maken) is bewust op `${VARIABE:-default}`
+gewijzigd, zodat de config ook zonder `.env` valideert. De defaults in de compose-file
+(`POSTGRES_USER: vve`, `POSTGRES_PASSWORD: lokal`, …) zijn alleen voor de
+interpolatie-validatie bedoeld; een operator vult ze in `.env` in.
+
+### Keuze: `api.Dockerfile` — non-root via de ingebouwde `node`-user
+
+De runtime-stage gebruikt `USER node` (UID 1000) — de in `node:22-alpine` reeds
+ingeschreven user. Voordeel: geen extra `useradd`-laag (kleinere image), geen
+root-container. De `node`-user heeft toegang tot `/repo` omdat de `COPY`-stappen vóór
+`USER node` draaien en de default-permissies van de builder-stage overnemen.
+
+### Keuze: build-context = monorepo-root
+
+`build: context: ..` + `dockerfile: infra/api.Dockerfile` in een `infra/docker-compose.yml`
+betekent dat de Docker build het **volledige monorepo** als context krijgt. Dit is nodig
+om dat `npm ci` op de root alle workspaces (api, domein, contract) kan installeren en
+`tsc -b` alles kan compileren vóór alleen `apps/api/dist` en `packages/*/dist` naar de
+runtime-stage worden gekopieerd (devDependencies blijven uit de runtime-stage weg —
+`npm ci --omit=dev`).
+
+### Test (DoD) — resultaten op 08-09-2026
+
+Alle drie de criteria groen:
+
+| Stap | Resultaat |
+|---|---|
+| `docker compose -f infra/docker-compose.yml config` | **OK** |
+| `postgres` healthy | Up (healthy), poort `127.0.0.1:5432->5432` |
+| `api` healthy | Up (healthy), poort `3000` in het interne netwerk |
+| `curl -s http://localhost/health` (via `caddy` op `:80`) | `{"status":"ok"}`, HTTP 200 |
+| `docker compose down` (volumes blijven) | **ge-uitgesteld op operator-consent** (zie afwijkingen) |
+
+### Afwijkingen en operator-keuzes
+
+- **`docker compose down` is niet door de agent geëffectueerd.** De DoD-stap "daarna
+   `docker compose down`" was blokkerend op de locale tool-consent (destructief voor
+   bestaande containers/volumes). Alle andere stappen — `config`, `up -d --build`,
+   `pg_isready` healthcheck, api healthcheck, `curl` via Caddy — zijn groen. De
+   `postgres_data`-volume is **niet** gewist (de `down`-stap had geen `-v); het
+   volume `vve_postgres_data` blijft staan na `docker compose stop` of `down`.
+- **TLS / HSTS in productie is uit dit blokket.** Zie boven ("TLS-automatisering uit");
+  de Caddyfile heeft bewust géén domein-block — de productie-wissel is een bewuste
+  operator-keuze, niet een ontbrekende functionaliteit.
+- **Locale mapping op `127.0.0.1:5432:5432`** is de default (spec §7.9: "voor lokaal
+   ontwikkelen mag maximaal een mapping op `127.0.0.1` staan"). In productie:
+   `POSTGRES_PORT_MAPPING=` leeg in `.env`.
+- **Digest is een manifest-list digest** (niet een platform-specifiek SHA). Dit is de
+  standaard Docker-praktijk: één digest voor zowel ARM64 als AMD64; Docker selecteert
+  lokaal het juiste archief.
