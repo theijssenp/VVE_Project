@@ -9,9 +9,13 @@ nodig verbeterd, en apart gecommit (bericht `FXX-review: ...`).
 **F03** — Drizzle-opzet, migratierunner, Testcontainers-harnas, eerste migratie
 (`vve`, `persoon`). Status: **in uitvoering** door de bouwsessie.
 
-Klaar-signaal: een commit die F03 afmeldt (patroon `F03` in het bericht), een schone
-werkboom, en aanwezige bestanden in `apps/api/src/database/schema/` en
-`apps/api/src/database/migraties/`.
+Klaar-signaal — alle drie moeten gelden, want los van elkaar geven ze vals alarm:
+
+1. een commit waarvan het bericht met `F03:` begint of `F03 klaar` bevat (niet enkel
+   `F03` ergens in de tekst — `docs: F02 klaar, F03 gestart` matchte daar al op);
+2. `apps/api/src/database/schema/` én `apps/api/src/database/migraties/` bevatten
+   bestanden;
+3. de werkboom is schoon, op bestanden van een volgend blok in uitvoering na.
 
 ## Werkwijze per blok
 
