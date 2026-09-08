@@ -48,6 +48,7 @@ Zonder deze blokken kan er niets anders gebouwd worden. F03 t/m F09 zijn de drag
 | F09 | Auditlog met hashketen, interceptor, dagelijkse ketenverificatie, alleen-INSERT-recht | M | F08 | §6.8 · test 38 | todo |
 | F10 | pg-boss, mailwachtrij, mailsjablonen, verzendworker met backoff | M | F03 | §7.7, M13 | todo |
 | F11 | Ionic-schil: routing, tokenopslag (cookie op web, Secure Storage native), HTTP-interceptor, foutafhandeling, inlog- en MFA-schermen | L | F07 | §7.8 | todo |
+| F12 | Beveiligingswachters tegen zwakke geheimen: ESLint-regels (`Math.random` verboden buiten tests, `===` op token-/hashvelden, niet-variabele IV bij `createCipheriv`, geen secret in log- of auditpaden) plus een statistische test op de wachtwoordgenerator (lengte, alfabetdekking, uniformiteit over 1 mln trekkingen, geen duplicaten, geen modulo-bias) | M | F07 | §7.6, §8.5 | todo |
 
 ## 3. Fase 1 — VvE, eenheden, gebruikers, documenten
 
@@ -164,11 +165,21 @@ Deze afhankelijkheden zijn niet te omzeilen:
 - **B01 vóór B02.** Bankmutaties bevatten IBAN's; die mogen nooit onversleuteld de database in, ook niet tijdelijk.
 - **B11 vóór I01.** Incasso op een administratie die nog niet klopt, is de duurste fout die deze applicatie kan maken.
 
+**F12 mag later, maar liefst niet te laat.** De wachters zijn het meest waard vóórdat F06/F07
+de wachtwoord- en tokencode schrijven: dan faalt CI op een zwak patroon in plaats van dat het
+van oplettendheid bij de review afhangt. Landt F12 er toch na, dan is de eerste run meteen een
+controle op wat F06/F07 hebben opgeleverd — ook nuttig, alleen achteraf. Wat het afdekt:
+`Math.random()` of `Date.now()` als entropiebron, modulo-bias in het tekenalfabet, een
+gegenereerd wachtwoord dat in een log of auditregel belandt, een omgevingsvlag die
+authenticatie omzeilt, tokens die ongehasht worden opgeslagen, tijdsafhankelijke
+tokenvergelijkingen, verlaagde argon2-parameters, en — met het oog op B01 — een vaste IV bij
+AES-GCM.
+
 ## 12. Voortgang
 
 | | Aantal |
 |---|---|
-| Blokken totaal | 70 |
+| Blokken totaal | 71 |
 | Klaar | 1 |
 | Bezig | 0 |
 
