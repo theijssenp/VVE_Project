@@ -6,12 +6,12 @@ Dit blokket bevat géén databasecode of migraties (dat is F03).
 
 ## Bestand
 
-| Bestand | Doel |
-|---|---|
+| Bestand              | Doel                                                                                                                                   |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
 | `docker-compose.yml` | Drie services: `postgres` (PG 16), `api` (NestJS), `caddy` (reverse proxy). Base images zijn op **digest** vastgezet (niet `:latest`). |
-| `api.Dockerfile` | Multi-stage build (builder → runtime), non-root user, `npm ci` met lockfile, geen devDependencies in de runtime-stage. |
-| `Caddyfile` | Minimale Caddy-config; reverse-proxied naar `api:3000`. Lokaal op HTTP poort 80. |
-| `.env.voorbeeld` | Kopieer naar `.env` en vullen. Bevat géén echte secrets. |
+| `api.Dockerfile`     | Multi-stage build (builder → runtime), non-root user, `npm ci` met lockfile, geen devDependencies in de runtime-stage.                 |
+| `Caddyfile`          | Minimale Caddy-config; reverse-proxied naar `api:3000`. Lokaal op HTTP poort 80.                                                       |
+| `.env.voorbeeld`     | Kopieer naar `.env` en vullen. Bevat géén echte secrets.                                                                               |
 
 ## Lokaal draaien
 

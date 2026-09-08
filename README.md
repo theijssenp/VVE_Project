@@ -4,11 +4,11 @@ Beheerapplicatie voor zelfbeherende Verenigingen van Eigenaren: volledige financ
 
 ## Documenten
 
-| Document | Inhoud |
-|---|---|
-| [`VVE_APPLICATIE_SPEC.md`](VVE_APPLICATIE_SPEC.md) | Volledig functioneel en technisch ontwerp — de bindende bouwprompt (domeinbegrippen, bedrijfsregels, datamodel, API-architectuur). |
-| [`WERKPLAN.md`](WERKPLAN.md) | Alle 70 werkblokken met afhankelijkheden en voortgang. Leidt de bouwvolgorde: eerst `todo`-blok waarvan alle afhankelijkheden `klaar` zijn. |
-| [`docs/besluiten.md`](docs/besluiten.md) | Ontwerpkeuzes per werkblok, met onderbouwing. |
+| Document                                           | Inhoud                                                                                                                                      |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`VVE_APPLICATIE_SPEC.md`](VVE_APPLICATIE_SPEC.md) | Volledig functioneel en technisch ontwerp — de bindende bouwprompt (domeinbegrippen, bedrijfsregels, datamodel, API-architectuur).          |
+| [`WERKPLAN.md`](WERKPLAN.md)                       | Alle 70 werkblokken met afhankelijkheden en voortgang. Leidt de bouwvolgorde: eerst `todo`-blok waarvan alle afhankelijkheden `klaar` zijn. |
+| [`docs/besluiten.md`](docs/besluiten.md)           | Ontwerpkeuzes per werkblok, met onderbouwing.                                                                                               |
 
 ## Stack
 

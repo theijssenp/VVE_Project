@@ -2,9 +2,8 @@
 //
 // Type-aware linting over de hele workspace via `projectService`, zonder een statische
 // `parserOptions.project`-lijst (stabiel met npm workspaces + cross-pakket imports).
-// `allowDefaultProject` zorgt dat config-/build-bestanden die buiten elk tsconfig vallen
-// (bv. deze eigen config, de vitest-config) nog linten in plaats van te crashen.
-// Zie docs/besluiten.md voor de onderbouwing.
+// Config-/build-bestanden die buiten elk tsconfig vallen (deze config, de vitest-config)
+// staan in `ignores` en hoeven dus geen defaultproject. Zie docs/besluiten.md.
 import js from '@eslint/js';
 import * as tseslint from 'typescript-eslint';
 
@@ -21,7 +20,6 @@ export default tseslint.config(
       '*.config.js',
       '*.config.mjs',
       '*.config.ts',
-      'apps/app/**',
     ],
   },
   js.configs.recommended,
@@ -43,8 +41,6 @@ export default tseslint.config(
         // projectService: type-aware zonder per-project tsconfig handmatig op te noemen.
         projectService: true,
         tsconfigRootDir: import.meta.dirname,
-        // Laat bestanden buiten elk tsconfig (config, build-scripts) met defaultproject linten.
-        allowDefaultProject: true,
       },
       sourceType: 'module',
     },

@@ -1,16 +1,25 @@
 name: CI — VvE-monorepo
 
-# F01: kwaliteitsketen blokkerend in CI (lint, test, build).
-# Node 22 (spec §7.1 / F01-item 8). Lokaal hoeft hij niet te draaien; de syntax telt.
+# F01: kwaliteitsketen blokkerend in CI (lint, formattering, test, build, afhankelijkheden).
+# Node 22 (spec §7.1). Lokaal hoeft hij niet te draaien; de syntax telt.
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
 
+# Minimale rechten voor de GITHUB_TOKEN (spec §8.2: niet meer dan nodig).
+permissions:
+  contents: read
+
+# Een nieuwe push op dezelfde branch annuleert de vorige run.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   quality:
-    name: lint · test · build
+    name: lint · format · test · build
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -28,8 +37,32 @@ jobs:
       - name: Lint (blokkerend)
         run: npm run lint
 
+      - name: Formattering (blokkerend)
+        run: npm run format:check
+
       - name: Test
         run: npm run test
 
       - name: Build
         run: npm run build
+
+  afhankelijkheden:
+    name: npm audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install (npm ci)
+        run: npm ci
+
+      # Spec §8.2: SCA blokkerend in CI. Drempel `high`, zodat een low/moderate
+      # bevinding in een devDependency de pipeline niet stillegt maar wel zichtbaar is.
+      - name: Audit (blokkerend vanaf 'high')
+        run: npm audit --audit-level=high
