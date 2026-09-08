@@ -6,27 +6,34 @@
 #
 # Gebruik (zie infra/README.md):
 #   cp .env.voorbeeld .env && chmod 600 .env
-#   docker compose -f infra/docker-compose.yml config
-#   docker compose -f infra/docker-compose.yml up -d
+#   docker compose --env-file .env -f infra/docker-compose.yml config
+#   docker compose --env-file .env -f infra/docker-compose.yml up -d
 #   curl -s http://localhost/health     # -> {"status":"ok"} via caddy
-#   docker compose -f infra/docker-compose.yml down
+#   docker compose --env-file .env -f infra/docker-compose.yml down
 #
-# Platform: de digests gelden voor linux/amd64 (CI draait op ubuntu-latest).
-# Lokale ARM64-digests staan in docs/besluiten.md (zie infra/README.md).
+# LET OP — `--env-file .env` is niet optioneel. Compose leest voor interpolatie
+# (${...}) het .env-bestand naast de compose-file, dus infra/.env, en NIET de root.
+# Zonder de vlag vallen alle waarden terug op de defaults hieronder. Daarom staat op
+# POSTGRES_PASSWORD een `:?`: dan faalt de opdracht hoorbaar in plaats van stil met
+# een zwak wachtwoord te starten.
+#
+# Er is bewust geen `env_file:` meer: `environment:` heeft in Compose voorrang op
+# `env_file:`, waardoor een ingevuld .env stil werd overschreven door de default.
+#
+# Platform: de digests zijn manifest-list-digests (OCI image index). Docker kiest per
+# host het juiste platform-archief, dus dezelfde digest werkt op arm64 (Apple Silicon)
+# en amd64 (CI). Geverifieerd met `docker manifest inspect`; zie docs/besluiten.md.
 
 name: vve
 
 services:
   postgres:
     image: postgres:16-alpine@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685
-    env_file:
-      - path: ../.env
-        required: false
     volumes:
       - postgres_data:/var/lib/postgresql/data
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-vve}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-lokal}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD ontbreekt — kopieer .env.voorbeeld naar .env en vul een sterk wachtwoord in}
       POSTGRES_DB: ${POSTGRES_DB:-vve}
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}']
@@ -37,6 +44,8 @@ services:
     ports:
       - '${POSTGRES_PORT_MAPPING:-127.0.0.1:5432:5432}'
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
     networks:
       - vve_net
 
@@ -44,9 +53,6 @@ services:
     build:
       context: ..
       dockerfile: infra/api.Dockerfile
-    env_file:
-      - path: ../.env
-        required: false
     environment:
       NODE_ENV: ${NODE_ENV:-production}
       PORT: ${API_PORT:-3000}
@@ -57,38 +63,49 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    healthcheck:
-      test:
-        [
-          'CMD-SHELL',
-          'node -e "fetch(''http://127.0.0.1:''+process.env.PORT+''/health'').then(r=>r.json().then(d=>{if(d.status!==''ok'')process.exit(1)}).catch(()=>process.exit(1))).catch(()=>process.exit(1))"',
-        ]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 15s
+    # De healthcheck staat in infra/api.Dockerfile (HEALTHCHECK) en wordt hier bewust
+    # niet herhaald: één definitie, geen twee waarden die uit elkaar kunnen lopen.
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
     networks:
       - vve_net
 
   caddy:
     image: caddy:2-alpine@sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648
-    env_file:
-      - path: ../.env
-        required: false
+    # Bewust GEEN env_file: Caddy heeft de databasesecrets niet nodig en hoort ze
+    # dus ook niet in zijn omgeving te hebben (spec §8.1, minste rechten).
     ports:
       - '80:80'
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # caddy_data bewaart de TLS-certificaten. Zonder dit volume vraagt Caddy bij
+      # elke herstart nieuwe certificaten aan en loop je tegen de Let's Encrypt-
+      # limieten — nu al inrichten, vóór de productie-TLS-omschakeling.
+      - caddy_data:/data
+      - caddy_config:/config
+      # Toegangslogs overleven `docker compose down` (spec §7.9: logkanalen).
+      - caddy_logs:/var/log/caddy
+    healthcheck:
+      test: ['CMD', 'wget', '--spider', '-q', 'http://127.0.0.1/health']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     depends_on:
       api:
         condition: service_healthy
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
     networks:
       - vve_net
 
 volumes:
   postgres_data: {}
+  caddy_data: {}
+  caddy_config: {}
+  caddy_logs: {}
 
 networks:
   vve_net:

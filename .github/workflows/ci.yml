@@ -46,6 +46,14 @@ jobs:
       - name: Build
         run: npm run build
 
+      # F02: de compose-file syntactisch valideren met het voorbeeld-env-bestand.
+      # Vangt kapotte interpolatie of ontbrekende verplichte variabelen (`:?`) af.
+      - name: Compose-file valideren
+        run: |
+          cp .env.voorbeeld .env
+          docker compose --env-file .env -f infra/docker-compose.yml config >/dev/null
+          rm .env
+
   afhankelijkheden:
     name: npm audit
     runs-on: ubuntu-latest

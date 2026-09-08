@@ -215,6 +215,66 @@ Alle drie de criteria groen:
 | `curl -s http://localhost/health` (via `caddy` op `:80`) | `{"status":"ok"}`, HTTP 200                                                    |
 | `docker compose down` (volumes blijven)                  | **OK** — alle containers gestopt/verwijderd; volume `vve_postgres_data` intact |
 
+### Herziening na review (08-09-2026)
+
+F02 draaide aantoonbaar: `curl http://localhost/health` gaf via Caddy `{"status":"ok"}`
+met alle healthchecks groen. De bevindingen zaten in wat er _niet_ gebeurde bij herstart,
+en in twee documentatieclaims die niet klopten.
+
+1. **De `.env` bereikte de container niet — het wachtwoord was `lokal`.** Dit was de
+   ernstigste bevinding. Twee mechanismen bevochten elkaar: `environment:` heeft in
+   Compose voorrang op `env_file:`, en interpolatie van `${...}` leest het
+   `.env`-bestand naast de compose-file (`infra/.env`), niet de repo-root. Netto:
+   de operator vulde een sterk wachtwoord in `.env` in, chmod 600 en al, en Postgres
+   startte met de default `lokal`. Geverifieerd met een geïsoleerde compose-proef die
+   exact deze opzet nabouwt.
+   Opgelost door één mechanisme aan te houden: `env_file:` is overal verwijderd, alle
+   waarden komen uit interpolatie, en het draaien gebeurt met `--env-file .env`.
+   Op `POSTGRES_PASSWORD` staat nu `:?` in plaats van `:-lokal`, zodat het vergeten van
+   de vlag hoorbaar faalt in plaats van stil een zwak wachtwoord te gebruiken.
+   Het bestaande volume was met `lokal` geïnitialiseerd en is opnieuw aangemaakt; het
+   bevatte alleen de kale initdb (geen migraties, geen schema — F03 was nog niet zover).
+2. **De onderbouwing van de `:-`-defaults klopte niet.** In dit document stond dat de
+   defaults nodig waren omdat "de repo in CI zonder `.env` draait". Er stond geen
+   compose-stap in de CI (`grep -c compose .github/workflows/ci.yml` gaf 0). Die stap is
+   nu wél toegevoegd, met `.env.voorbeeld` als invoer.
+3. **Caddy had geen volumes.** Geen `caddy_data` betekent dat elke herstart nieuwe
+   TLS-certificaten aanvraagt — bij de productie-omschakeling loop je dan direct tegen
+   de Let's Encrypt-limieten. En de toegangslogs naar `/var/log/caddy/app.log` gingen
+   bij elke `down` verloren, terwijl §7.9 logkanalen juist als bewaarde sporen behandelt.
+   Toegevoegd: `caddy_data`, `caddy_config`, `caddy_logs`. Persistentie geverifieerd
+   over een `down`/`up`-cyclus.
+4. **Caddy kreeg de databasesecrets zonder ze nodig te hebben.** `env_file` stond ook op
+   die service. Verwijderd (spec §8.1, minste rechten).
+5. **Geen beveiligingsheaders.** `X-Content-Type-Options`, `X-Frame-Options`,
+   `Referrer-Policy` en `Permissions-Policy` hangen niet van TLS af en kosten vier
+   regels. Toegevoegd, plus `-Server`. HSTS en CSP volgen bij de https-omschakeling:
+   HSTS heeft over plain HTTP geen effect en de CSP hangt af van de Ionic-bundel (F11).
+6. **Caddy had geen healthcheck** terwijl de andere twee die wel hadden. Toegevoegd.
+   Verder `no-new-privileges` op alle drie de services.
+7. **Dubbele healthcheck-definitie voor de api** (Dockerfile én compose, met
+   verschillende `start_period`). De compose-variant is verwijderd; `depends_on:
+service_healthy` werkt gewoon op de HEALTHCHECK uit het image.
+
+**Twee documentatieclaims waren onjuist en zijn gecorrigeerd in `infra/README.md`:**
+
+- "De api-service start als `appuser` (UID 1001)" — het is `USER node`, UID 1000.
+  Gecontroleerd met `id` in de draaiende container.
+- "De postgres-container draait met `--network-alias postgres`" — die instelling stond
+  nergens in de compose-file.
+
+**En één claim die wél klopte, maar op twee plaatsen verkeerd was overgenomen:** dit
+document zei terecht dat de digests manifest-list-digests zijn die beide platformen
+dekken; de kopteksten van `docker-compose.yml` en `infra/README.md` beweerden het
+tegenovergestelde (amd64-only respectievelijk arm64-only, met een instructie om ze te
+vervangen). `docker manifest inspect` bevestigt een OCI image index met zowel amd64 als
+arm64. Beide teksten zijn rechtgezet — anders "repareert" iemand later een werkende opzet.
+
+**Nagemeten na de wijzigingen:** compose config OK met de vlag en hard falend zonder,
+alle drie de services healthy, `{"status":"ok"}` via Caddy, de vier headers aanwezig,
+het 39-tekens wachtwoord uit `.env` werkt over TCP, en de toegangslogs staan er na een
+`down`/`up` nog.
+
 ### Afwijkingen en operator-keuzes
 
 - **TLS / HSTS in productie is uit dit blokket.** Zie boven ("TLS-automatisering uit");

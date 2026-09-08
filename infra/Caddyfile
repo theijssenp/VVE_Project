@@ -1,22 +1,33 @@
-# Caddy — minimale reverse proxy voor de VvE-omgeving (blok F02, spec §7.9).
+# Caddy — reverse proxy voor de VvE-omgeving (blok F02, spec §7.9).
 #
-# LOKAAL: HTTP op poort 80. TLS-automatisering is bewust uitgezet in dit blokket
-# (geen domein/letsencrypt-lokaal; de productie-keuze staat in docs/besluiten.md).
+# LOKAAL: HTTP op poort 80. TLS-automatisering is bewust uit in dit blok; de
+# productie-omschakeling (domein-block + automatische https) staat in docs/besluiten.md.
 #
-# Alle verkeer gaat naar de api-service binnen het compose-netwerk op poort 3000.
-# Caddy is de enige poort die naar buiten luistert; de api heeft géén host-mapping
-# en postgres is op 127.0.0.1 alleen (spec §7.9: "niet aan het internet blootgesteld").
+# Caddy is de enige service die naar buiten luistert. De api heeft geen host-mapping
+# en postgres luistert hooguit op 127.0.0.1 (spec §7.9).
 
 :80 {
-   log {
-      output file /var/log/caddy/app.log
-    format json
-   }
+	log {
+		# Volume caddy_logs, zodat toegangslogs een herstart overleven.
+		output file /var/log/caddy/app.log
+		format json
+	}
 
-    # Reverse proxy naar de API (spec §7.9).
-   reverse_proxy api:3000 {
-      header_up X-Real-IP {remote_host}
-      header_up X-Forwarded-For {remote_host}
-      header_up X-Forwarded-Proto {scheme}
-    }
+	# Beveiligingsheaders die niet van TLS afhangen (spec §8.2). Strict-Transport-Security
+	# en de Content-Security-Policy volgen bij de productie-omschakeling naar https:
+	# HSTS over plain HTTP heeft geen effect, en de CSP hangt af van de Ionic-bundel (F11).
+	header {
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "same-origin"
+		Permissions-Policy "geolocation=(), microphone=(), camera=()"
+		# Verberg de servertechnologie.
+		-Server
+	}
+
+	reverse_proxy api:3000 {
+		header_up X-Real-IP {remote_host}
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Forwarded-Proto {scheme}
+	}
 }
