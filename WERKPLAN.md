@@ -37,7 +37,7 @@ Zonder deze blokken kan er niets anders gebouwd worden. F03 t/m F09 zijn de drag
 
 | ID | Blok | Omvang | Na | Spec | Status |
 |---|---|---|---|---|---|
-| F01 | Monorepo (npm workspaces), TypeScript strict, ESLint `strict-type-checked`, Prettier, Vitest, CI-pipeline | S | — | §7.2 | todo |
+| F01 | Monorepo (npm workspaces), TypeScript strict, ESLint `strict-type-checked`, Prettier, Vitest, CI-pipeline | S | — | §7.2 | **klaar** |
 | F02 | Docker Compose (Postgres, API, Caddy), `.env`-structuur, secrets buiten de repo, vastgezette base images | S | F01 | §7.9, §8.2 | todo |
 | F03 | Drizzle-opzet, migratierunner, Testcontainers-harnas, eerste migratie (`vve`, `persoon`) | M | F02 | §6.1, §6.3 | todo |
 | F04 | RLS: rollen `vve_migratie`/`vve_app`/`vve_platform`, policies, `SET LOCAL`-transactiehelper | M | F03 | §6.9 · test 33 | todo |
@@ -169,7 +169,7 @@ Deze afhankelijkheden zijn niet te omzeilen:
 | | Aantal |
 |---|---|
 | Blokken totaal | 70 |
-| Klaar | 0 |
+| Klaar | 1 |
 | Bezig | 0 |
 
 Statuswaarden: `todo` · `bezig` · `klaar` · `overgeslagen`.
