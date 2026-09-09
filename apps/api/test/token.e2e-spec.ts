@@ -27,12 +27,12 @@ import { type Klok } from '../src/gemeenschappelijk/system-klok.js';
 import { gedeeldeTestDb, type TestPgDb } from './testcontainers.js';
 import { persoon } from '../src/database/schema/index.js';
 import {
-   HergebruikGesignaleerdFout,
-   maakTokenService,
-   OnbekendTokenFout,
-   verifieerAccessToken,
-   VerlopenTokenFout,
-    } from '../src/gemeenschappelijk/auth/token.js';
+  HergebruikGesignaleerdFout,
+  maakTokenService,
+  OnbekendTokenFout,
+  verifieerAccessToken,
+  VerlopenTokenFout,
+} from '../src/gemeenschappelijk/auth/token.js';
 
 // ---------------------------------------------------------------------------
 // Hulp
@@ -47,18 +47,21 @@ function verstelbareKlok(basisMs: number): { klok: Klok; spring: (ms: number) =>
   let t = basisMs;
   const nu = (): Date => new Date(t);
   const klok: Klok = {
-   nu,
-   vandaag: () => {
-    const deeltjes = new Intl.DateTimeFormat('en-CA', {
-      timeZone: 'Europe/Amsterdam',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-       }).formatToParts(nu());
-    const [jaar, maand, dag] = deeltjes.map((d) => d.value).join('/').split('/');
-    return { jaar: Number(jaar), maand: Number(maand), dag: Number(dag) };
-      },
-      };
+    nu,
+    vandaag: () => {
+      const deeltjes = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Europe/Amsterdam',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).formatToParts(nu());
+      const [jaar, maand, dag] = deeltjes
+        .map((d) => d.value)
+        .join('/')
+        .split('/');
+      return { jaar: Number(jaar), maand: Number(maand), dag: Number(dag) };
+    },
+  };
   return { klok, spring: (ms: number) => (t += ms) };
 }
 
@@ -70,12 +73,12 @@ async function seedPersoon(db: TestPgDb): Promise<bigint> {
   emailAantal += 1;
   const nodePid = process.env['NODE_PID'] ?? '0';
   const [rij] = await db.db
-        .insert(persoon)
-        .values({
-       email: `token-${String(emailAantal)}-${nodePid}@voorbeeld.nl`,
-       achternaam: 'Tokeentest',
-        })
-      .returning({ id: persoon.id });
+    .insert(persoon)
+    .values({
+      email: `token-${String(emailAantal)}-${nodePid}@voorbeeld.nl`,
+      achternaam: 'Tokeentest',
+    })
+    .returning({ id: persoon.id });
   if (!rij) throw new Error('persoon-seed leverde geen rij op');
   return rij.id;
 }
@@ -83,9 +86,9 @@ async function seedPersoon(db: TestPgDb): Promise<bigint> {
 async function actieveRijentelling(db: TestPgDb, persoonId: bigint): Promise<number> {
   const { rows } = await db.pool.query<{ actief: string }>(
     'SELECT count(*) FILTER (WHERE ingetrokken_op IS NULL)::int AS actief ' +
-       'FROM apparaat_sessie WHERE persoon_id = $1',
+      'FROM apparaat_sessie WHERE persoon_id = $1',
     [String(persoonId)],
-     );
+  );
   return Number(rows[0]?.actief ?? 0);
 }
 
@@ -93,7 +96,7 @@ async function totaleRijentelling(db: TestPgDb, persoonId: bigint): Promise<numb
   const { rows } = await db.pool.query<{ totaal: number }>(
     'SELECT count(*)::int AS totaal FROM apparaat_sessie WHERE persoon_id = $1',
     [String(persoonId)],
-      );
+  );
   return rows[0]?.totaal ?? 0;
 }
 
@@ -102,11 +105,11 @@ describe('Token-uitgifte & apparaat-sessies (F06b, §7.6)', () => {
 
   beforeAll(async () => {
     db = await gedeeldeTestDb();
-      });
+  });
 
   afterAll(async () => {
     await db?.stop();
-      });
+  });
 
   it('geeft een verifieerbaar JWT uit met de juiste claims (sub/iss/aud)', async () => {
     if (!db) throw new Error('beforeAll slaagde niet: geen test-db');
@@ -114,8 +117,10 @@ describe('Token-uitgifte & apparaat-sessies (F06b, §7.6)', () => {
     const { klok } = verstelbareKlok(Date.now());
     const service = maakTokenService({ db: db.db, klok, geheim: GEHEIM });
 
-    const { accessToken, refreshToken, sessieId } =
-      await service.geefTokensUit({ id: persoonId }, { platform: 'web' });
+    const { accessToken, refreshToken, sessieId } = await service.geefTokensUit(
+      { id: persoonId },
+      { platform: 'web' },
+    );
 
     const claims = await verifieerAccessToken(accessToken, klok, { geheim: GEHEIM });
     expect(claims.sub).toBe(String(persoonId));
@@ -123,7 +128,7 @@ describe('Token-uitgifte & apparaat-sessies (F06b, §7.6)', () => {
     expect(claims.aud).toBe('vve');
     expect(refreshToken).toMatch(/^[0-9a-f]{64}$/); // 32 bytes CSPRNG → hex
     expect(typeof sessieId).toBe('bigint');
-      });
+  });
 
   it('verlaat het ruwe refresh-token niet in de db (alleen sha256-hex)', async () => {
     if (!db) throw new Error('beforeAll slaagde niet: geen test-db');
@@ -135,14 +140,14 @@ describe('Token-uitgifte & apparaat-sessies (F06b, §7.6)', () => {
     const result = await db.pool.query<{ refresh_token_hash: string }>(
       'SELECT refresh_token_hash FROM apparaat_sessie WHERE persoon_id = $1',
       [String(persoonId)],
-       );
+    );
     const rij = result.rows[0];
     expect(rij).toBeDefined();
     expect(rij?.refresh_token_hash).toMatch(/^[0-9a-f]{64}$/);
-     // De hash is óók níet het ruwe token (anders staat het ruwe token in de db).
+    // De hash is óók níet het ruwe token (anders staat het ruwe token in de db).
     expect(rij?.refresh_token_hash).not.toBe(refreshToken);
     expect(rij?.refresh_token_hash.toLowerCase()).not.toContain(refreshToken.slice(0, 12));
-      });
+  });
 
   it('een access-token verloopt na 15 minuten (exp-claim), via de klok', async () => {
     if (!db) throw new Error('beforeAll slaagde niet: geen test-db');
@@ -151,14 +156,14 @@ describe('Token-uitgifte & apparaat-sessies (F06b, §7.6)', () => {
     const service = maakTokenService({ db: db.db, klok, geheim: GEHEIM }); // default 15 min
 
     const { accessToken } = await service.geefTokensUit({ id: persoonId }, {});
-     // Geldig op het uitdeelmoment.
+    // Geldig op het uitdeelmoment.
     expect(await verifieerAccessToken(accessToken, klok, { geheim: GEHEIM })).toBeDefined();
-     // Spring net over de 15-minuut-grens; nu faalt de verifiëring.
+    // Spring net over de 15-minuut-grens; nu faalt de verifiëring.
     spring(15 * 60 * 1000 + 1000);
     await expect(verifieerAccessToken(accessToken, klok, { geheim: GEHEIM })).rejects.toThrow(
-       JOSEError,
-        );
-      });
+      JOSEError,
+    );
+  });
 
   it('verifieert niet tegen een ander geheim', async () => {
     if (!db) throw new Error('beforeAll slaagde niet: geen test-db');
@@ -168,11 +173,11 @@ describe('Token-uitgifte & apparaat-sessies (F06b, §7.6)', () => {
     const { accessToken } = await service.geefTokensUit({ id: persoonId }, {});
 
     await expect(
-       verifieerAccessToken(accessToken, klok, {
+      verifieerAccessToken(accessToken, klok, {
         geheim: 'een-andere-voldoende-lange-secret-waarde',
-        }),
-        ).rejects.toThrow();
-      });
+      }),
+    ).rejects.toThrow();
+  });
 
   it('rotereert: de oude token wordt geweigerd, de nieuwe werkt', async () => {
     if (!db) throw new Error('beforeAll slaagde niet: geen test-db');
@@ -182,21 +187,21 @@ describe('Token-uitgifte & apparaat-sessies (F06b, §7.6)', () => {
 
     const { refreshToken: r0, accessToken } = await service.geefTokensUit({ id: persoonId }, {});
     expect((await verifieerAccessToken(accessToken, klok, { geheim: GEHEIM })).sub).toBe(
-       String(persoonId),
-       );
+      String(persoonId),
+    );
 
-      // r0 (actieve rij) roteert naar r1, in dezelfde `familie_id`.
+    // r0 (actieve rij) roteert naar r1, in dezelfde `familie_id`.
     const r1 = await service.verfris(r0, { ip: '127.0.0.1' });
     expect(r1.refreshToken).not.toBe(r0);
     expect(r1.persoonId).toBe(persoonId);
 
-      // De nieuwe token werkt (r1 → r2).
-      const r2 = await service.verfris(r1.refreshToken, {});
-      expect(r2.refreshToken).not.toBe(r1.refreshToken);
+    // De nieuwe token werkt (r1 → r2).
+    const r2 = await service.verfris(r1.refreshToken, {});
+    expect(r2.refreshToken).not.toBe(r1.refreshToken);
 
-      // De ouderwetse r0 is nu geconsumeerd → hergebruik → geweigerd.
+    // De ouderwetse r0 is nu geconsumeerd → hergebruik → geweigerd.
     await expect(service.verfris(r0, {})).rejects.toThrow(HergebruikGesignaleerdFout);
-      });
+  });
 
   it('herbruikdetectie: een reeds ingewisseld token trekt de HELE familie in', async () => {
     if (!db) throw new Error('beforeAll slaagde niet: geen test-db');
@@ -204,26 +209,27 @@ describe('Token-uitgifte & apparaat-sessies (F06b, §7.6)', () => {
     const { klok } = verstelbareKlok(Date.now());
     const service = maakTokenService({ db: db.db, klok, geheim: GEHEIM, refreshDagen: 30 });
 
-     // Eén apparaat, één rotatie → twee rijen dezelfde familie:
-     // R0 (wordt bij de rotatie ingetrokken 'geroteerd'), R1 (actief).
-    const { refreshToken: r0 } = await service.geefTokensUit({ id: persoonId }, { platform: 'ios' });
+    // Eén apparaat, één rotatie → twee rijen dezelfde familie:
+    // R0 (wordt bij de rotatie ingetrokken 'geroteerd'), R1 (actief).
+    const { refreshToken: r0 } = await service.geefTokensUit(
+      { id: persoonId },
+      { platform: 'ios' },
+    );
     const r1 = await service.verfris(r0, {});
     expect(await totaleRijentelling(db, persoonId)).toBe(2);
     expect(await actieveRijentelling(db, persoonId)).toBe(1);
 
-      // Herbruik: r0 aanbieden nádat het reeds is ingewisseld.
+    // Herbruik: r0 aanbieden nádat het reeds is ingewisseld.
     await expect(service.verfris(r0, {})).rejects.toThrow(HergebruikGesignaleerdFout);
 
-      // De HELE familie is nu ingetrokken: 0 actieve rijen (ook r1).
+    // De HELE familie is nu ingetrokken: 0 actieve rijen (ook r1).
     expect(await actieveRijentelling(db, persoonId)).toBe(0);
     expect(await totaleRijentelling(db, persoonId)).toBe(2);
 
-     // Zelfs de "nieuwe" r1 is nu onbruikbaar: de familie is ingetrokken, en r1
-     // is zelf een geconsumeerd refresh_token_hash → herbruik-branch opnieuw.
-     await expect(service.verfris(r1.refreshToken, {})).rejects.toThrow(
-      HergebruikGesignaleerdFout,
-       );
-      });
+    // Zelfs de "nieuwe" r1 is nu onbruikbaar: de familie is ingetrokken, en r1
+    // is zelf een geconsumeerd refresh_token_hash → herbruik-branch opnieuw.
+    await expect(service.verfris(r1.refreshToken, {})).rejects.toThrow(HergebruikGesignaleerdFout);
+  });
 
   it('trekSessieIn: uitloggen trekt de eigen sessie in', async () => {
     if (!db) throw new Error('beforeAll slaagde niet: geen test-db');
@@ -234,17 +240,17 @@ describe('Token-uitgifte & apparaat-sessies (F06b, §7.6)', () => {
     const { sessieId } = await service.geefTokensUit({ id: persoonId }, {});
     expect((await service.trekSessieIn(sessieId)).ingetrokken).toBe(true);
 
-      // Dubbel uitlezen doet niets (reeds ingetrokken).
+    // Dubbel uitlezen doet niets (reeds ingetrokken).
     expect((await service.trekSessieIn(sessieId)).ingetrokken).toBe(false);
 
-      // De rij heeft reden 'uitgelogd' en een `ingetrokken_op`.
+    // De rij heeft reden 'uitgelogd' en een `ingetrokken_op`.
     const { rows } = await db.pool.query<{ reden: string | null; ts: string | null }>(
       'SELECT intrekking_reden AS reden, ingetrokken_op AS ts FROM apparaat_sessie WHERE id = $1',
       [String(sessieId)],
-       );
+    );
     expect(rows[0]?.reden).toBe('uitgelogd');
     expect(rows[0]?.ts).not.toBeNull();
-      });
+  });
 
   it('trekAlleSessiesIn: "log alle apparaten uit" trekt alle rijen van de persoon in', async () => {
     if (!db) throw new Error('beforeAll slaagde niet: geen test-db');
@@ -252,7 +258,7 @@ describe('Token-uitgifte & apparaat-sessies (F06b, §7.6)', () => {
     const { klok } = verstelbareKlok(Date.now());
     const service = maakTokenService({ db: db.db, klok, geheim: GEHEIM, refreshDagen: 30 });
 
-     // Drie apparaten (drie families) voor dezelfde persoon.
+    // Drie apparaten (drie families) voor dezelfde persoon.
     const a = await service.geefTokensUit({ id: persoonId }, { platform: 'web' });
     const b = await service.geefTokensUit({ id: persoonId }, { platform: 'ios' });
     const c = await service.geefTokensUit({ id: persoonId }, { platform: 'android' });
@@ -261,17 +267,11 @@ describe('Token-uitgifte & apparaat-sessies (F06b, §7.6)', () => {
     expect((await service.trekAlleSessiesIn(persoonId)).ingetrokken).toBe(3);
     expect(await actieveRijentelling(db, persoonId)).toBe(0);
 
-      // En geen van de drie werkt meer (geen actieve rij met die hash).
-    await expect(service.verfris(a.refreshToken, {})).rejects.toThrow(
-       HergebruikGesignaleerdFout,
-       );
-    await expect(service.verfris(b.refreshToken, {})).rejects.toThrow(
-       HergebruikGesignaleerdFout,
-       );
-    await expect(service.verfris(c.refreshToken, {})).rejects.toThrow(
-       HergebruikGesignaleerdFout,
-       );
-      });
+    // En geen van de drie werkt meer (geen actieve rij met die hash).
+    await expect(service.verfris(a.refreshToken, {})).rejects.toThrow(HergebruikGesignaleerdFout);
+    await expect(service.verfris(b.refreshToken, {})).rejects.toThrow(HergebruikGesignaleerdFout);
+    await expect(service.verfris(c.refreshToken, {})).rejects.toThrow(HergebruikGesignaleerdFout);
+  });
 
   it('weigert een onbekende refresh-token met een specifieke fout', async () => {
     if (!db) throw new Error('beforeAll slaagde niet: geen test-db');
@@ -281,11 +281,11 @@ describe('Token-uitgifte & apparaat-sessies (F06b, §7.6)', () => {
       klok,
       geheim: GEHEIM,
       refreshDagen: 30,
-         });
+    });
     await expect(service.verfris('d00d-d00d-geen-echt-token', {})).rejects.toThrow(
-       OnbekendTokenFout,
-        );
-       });
+      OnbekendTokenFout,
+    );
+  });
 
   it('weigert een verlopen refresh-token met een specifieke fout', async () => {
     if (!db) throw new Error('beforeAll slaagde niet: geen test-db');
@@ -294,8 +294,50 @@ describe('Token-uitgifte & apparaat-sessies (F06b, §7.6)', () => {
     const service = maakTokenService({ db: db.db, klok, geheim: GEHEIM, refreshDagen: 1 });
 
     const { refreshToken } = await service.geefTokensUit({ id: persoonId }, {});
-     // Spring voorbij de refresh-levensduur (1 dag).
+    // Spring voorbij de refresh-levensduur (1 dag).
     spring(2 * 24 * 60 * 60 * 1000);
     await expect(service.verfris(refreshToken, {})).rejects.toThrow(VerlopenTokenFout);
-      });
+  });
+});
+
+describe('TokenService — geheim is verplicht (F06b-review)', () => {
+  let db: TestPgDb | undefined;
+  const oorspronkelijk = process.env['JWT_SECRET'];
+
+  beforeAll(async () => {
+    db = await gedeeldeTestDb();
+  });
+  afterAll(async () => {
+    await db?.stop();
+    if (oorspronkelijk === undefined) delete process.env['JWT_SECRET'];
+    else process.env['JWT_SECRET'] = oorspronkelijk;
+  });
+
+  it('start niet zonder JWT_SECRET: er is bewust geen standaardwaarde', () => {
+    if (!db) throw new Error('geen test-db');
+    delete process.env['JWT_SECRET'];
+    expect(() =>
+      maakTokenService({ db: db.db, klok: verstelbareKlok(1_700_000_000_000).klok }),
+    ).toThrow(/JWT_SECRET ontbreekt/);
+  });
+
+  it('weigert een te kort geheim', () => {
+    if (!db) throw new Error('geen test-db');
+    delete process.env['JWT_SECRET'];
+    expect(() =>
+      maakTokenService({
+        db: db.db,
+        klok: verstelbareKlok(1_700_000_000_000).klok,
+        geheim: 'te-kort',
+      }),
+    ).toThrow(/minimaal 32 tekens/);
+  });
+
+  it('accepteert een geheim uit de omgeving', () => {
+    if (!db) throw new Error('geen test-db');
+    process.env['JWT_SECRET'] = 'x'.repeat(48);
+    expect(() =>
+      maakTokenService({ db: db.db, klok: verstelbareKlok(1_700_000_000_000).klok }),
+    ).not.toThrow();
+  });
 });

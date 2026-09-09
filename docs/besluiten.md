@@ -656,3 +656,117 @@ Open punt, bewust niet gerepareerd: de zwarte lijst telt circa 130 ingangen. §7
 `zxcvbn` of een lokale HIBP-lijst; dit is verdedigbaar als eerste stap en de bouwsessie heeft
 het vervolg zelf genoteerd, maar het is dun. Een grotere lokale lijst is een
 afhankelijkheidsafweging die niet in een review thuishoort.
+
+---
+
+## F06b — Token-uitgifte, apparaat-sessies, refresh-rotatie (09-09-2026)
+
+Deelstuk 2 van F06: de JWT-access-token, de opake refresh-token met rotatie en de
+hergebruikdetectie, plus de DB-tabel `apparaat_sessie`, de Drizzle-schema's voor
+`apparaat_sessie` en `rol_toewijzing`, en de migratie `0005`. Nog géén HTTP
+(dat is F08/deelstuk 3), en de integratie met `mislukte_pogingen`/`geblokeerd_tot`
+op `persoon` is eveneens niet in dit deelstuk.
+
+### Nieuwe dependency: `jose` (verantwoord, spec §8.2)
+
+§8.2 vraagt dat elke nieuwe dependency wordt verantwoord. `jose` vult de
+JWT-eis uit §7.6 ("JWT, 15 minuten, in geheugen") en is de referentie-
+implementatie die daarvoor ook wordt genoemd; de `zxcvbn`-keus (F06a) is
+bewust uit dit deelstuk gehouden — die is breder dan nodig voor tokens.
+`jose` is geen native binding (geen compilatiestap, alleen pure-JS
+implementaties), dus de install is licht. Het is de één-en-alleen externe
+dependency die F06b toevoegt.
+
+### HS256 met symmetrisch omgevingsgeheim
+
+Voor de first-party, single-server applicatie (§7.6) is HS256 met één
+gedeeld `JWT_SECRET` het eenvoudigst dat de eis "met omgevingsgeheim"
+toereikt: één sleutel tekenen én verifiëren, geen sleutelwissel per
+uitgave, geen publieke sleutels die aan de client moeten worden
+uitgedeeld. De keus staat als `TOKEN_ALG = 'HS256'`-constante in
+`token.ts`; de `SecretKey`-object wordt per aanroep van
+`tekenAccessToken`/`verifieerAccessToken` uit het geheim opgebouwd,
+zodat de geheime-inhoud niet in een long-lived object blijft staan.
+Overstappen naar ES256 (asymmetrisch) is mogelijk zodra signing
+wordt uitgedefd van de requestpad; dat is géén eis van de spec en
+daarom nu niet gepland.
+
+### `refresh_token_hash` is `char(64)` sha256-hex; ruw token verlaat de db
+
+Het ruwe refresh-token wordt met `crypto.randomBytes(32)` gegenereerd
+en meteen na de uitgifte uit de geheugenlocatie verwijdert; in de DB
+wordt alleen de sha256-hex opgeslagen (spec §8.2: "de ruwe token
+verlaat de database nooit"). De lengte past exact in de
+`char(64)`-kolom en de kolom is UNIQUE, zodat de hergebruikzoek
+één rij oplevert (één hash, één sessie).
+
+### Rotatie door toevoegen (nieuwe rij, oude ingetrokken)
+
+Een `verfris`-aanbod in de actieve rij voert een rotatie uit in één
+Postgres-transactie: de oude rij wordt ingetrokken (reden
+`geroteerd`, geen `verloopt_op`-verlenging) óók is er een nieuwe
+rij in dezelfde `familie_id` (met `vorige_token_hash` wijzend naar
+het net-geconsumeerde token en met de `verloopt_op` van de oude)
+toegevoegd. De levensduur wordt niet verlengd; een gestolen sessie
+kunnen dus niet oneindig worden verlengd. De
+transactie-structuur is bewust zo opgezet dat alle db-mutaties zich
+in de transactie-rollback-callback afspelen en de _fout_
+(HergebruikGesignaleerdFout, VerlopenTokenFout) éérst _na_ de
+transactie — een throw in de callback zou anders de commit
+ongedaan maken en de hergebruik-intrekking zou verloren gaan.
+
+### Klok-injectie
+
+`token.ts` neem een `Klok` aan (default `SystemKlok`) zodat
+expiratie- en verloop-tests deterministisch draaien via een
+verstelbare klok — geen timing-asserts (spec F06a). De `exp`-claim
+wordt dubbel gevalideerd: jose (tegen de systeemklok — defence in
+depth in productie) én expliciet via de geïnjecteerde klok
+(zodat de verstelling in de tests effect heeft).
+
+### Open punten (bewust buiten F06b)
+
+- `mislukte_pogingen`/`geblokeerd_tot` op `person` (rate limiting,
+  spec §7.6, 5 pogingen per 15 min): deelstuk 3 (F06c).
+- `zxcvbn` of grotere HIBP-lijst: zie F06a-afdelingen.
+- `needsRehash`-aansluiting bij inloggen: deelstuk 3.
+- Constante-tijdige afhandeling van corrupte token's (dummy
+  `argon2id`-hash bij onbekende hash): de huidige `verfris`
+  retourneert `OnbekendTokenFout` — een dummy-hash om het
+  tijdsverschil te minimaliseren is een verbeterings-
+  richting in F06c.
+
+### Tussentijdse review (09-09-2026) — F06b (token-uitgifte en refresh-rotatie)
+
+Goed gebouwd: opake refresh tokens van 32 bytes uit `randomBytes`, alleen de sha256-hex in
+de database (`char(64) NOT NULL UNIQUE`), rotatie door een nieuwe rij in dezelfde
+`familie_id` en hergebruikdetectie die de hele familie intrekt. De testset dekt precies de
+juiste dingen, inclusief "het ruwe token staat niet in de database" en test #35. Het JWT-pad
+klopt ook: HS256, `iss` en `aud` afgedwongen, `exp` dubbel gecontroleerd (jose én de
+geïnjecteerde klok), `clockTolerance` op nul. Twee ingrepen.
+
+1. **Een ingebakken terugvalwaarde voor het JWT-geheim — de ernstigste bevinding tot nu toe.**
+
+   ```
+   config.geheim ?? process.env['JWT_SECRET'] ?? 'dev-geheim-verander-dit-via-JWT_SECRET'
+   ```
+
+   Zonder `NODE_ENV`-guard. Ontbreekt `JWT_SECRET` in productie, dan tekent én verifieert de
+   API met een waarde die in de repository staat. Wie de broncode of de image kan lezen,
+   vervalst daarmee een geldig access token voor elke `persoon.id` — accountovername voor
+   alle gebruikers, zonder spoor. De aanwezige lengtecheck van 16 tekens bood geen
+   bescherming: de terugvalwaarde is 37 tekens.
+
+   Het commentaar noemde dit "hetzelfde patroon als DATABASE_URL". Dat is precies het
+   verschil dat telt: een verkeerde databaseverbinding faalt hoorbaar, een verkeerd
+   JWT-geheim werkt perfect. Terugvalwaarde verwijderd; de service start niet zonder geheim
+   en eist minimaal 32 tekens. `JWT_SECRET` toegevoegd aan `.env.voorbeeld` met een
+   `openssl rand`-aanwijzing. Drie tests leggen het gedrag vast.
+
+2. **Algoritme-allowlist toegevoegd** (`algorithms: ['HS256']`). Jose weigert met een
+   symmetrische sleutel al een asymmetrisch algoritme of `none`, dus dit is verdediging in
+   de diepte — maar de aanname hoort in de code te staan, niet in het hoofd van de lezer.
+
+Dit is geen kwaadaardige achterdeur maar een gemakskeuze; het effect is niettemin een
+universele vervalsingssleutel in de broncode. Precies de categorie waar blok F12 op moet
+gaan letten.

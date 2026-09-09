@@ -100,21 +100,21 @@ export abstract class TokenFout extends Error {
     this.name = new.target.name;
     // Vervolg de `Error`-keten onder Node 15+.
     Error.captureStackTrace(this, this.constructor);
-    }
+  }
 }
 
 /** De aangeboden refresh-token is niet bekend als actieve of ingewisselde. */
 export class OnbekendTokenFout extends TokenFout {
   constructor() {
-   super('Onbekend refresh-token');
-    }
+    super('Onbekend refresh-token');
+  }
 }
 
 /** De sessie (of token) is verlopen. */
 export class VerlopenTokenFout extends TokenFout {
   constructor() {
-   super('Verlopen refresh-token');
-    }
+    super('Verlopen refresh-token');
+  }
 }
 
 /**
@@ -124,8 +124,8 @@ export class VerlopenTokenFout extends TokenFout {
  */
 export class HergebruikGesignaleerdFout extends TokenFout {
   constructor(readonly familieId: string) {
-   super(`Hergebruik gedetecteerd voor familie ${familieId}; alle sessies ingetrokken`);
-    }
+    super(`Hergebruik gedetecteerd voor familie ${familieId}; alle sessies ingetrokken`);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -194,12 +194,12 @@ export async function tekenAccessToken(
   const geheim = new TextEncoder().encode(config.geheim);
   const nuSec = Math.floor(nu.getTime() / 1000);
   return new SignJWT({ sub: String(persoonId) })
-      .setProtectedHeader({ alg: 'HS256', typ: 'JWT' })
-      .setIssuedAt(nuSec)
-      .setExpirationTime(nuSec + config.minuten * 60)
-      .setIssuer(ISSUER)
-      .setAudience(AUDIENCE)
-      .sign(geheim);
+    .setProtectedHeader({ alg: 'HS256', typ: 'JWT' })
+    .setIssuedAt(nuSec)
+    .setExpirationTime(nuSec + config.minuten * 60)
+    .setIssuer(ISSUER)
+    .setAudience(AUDIENCE)
+    .sign(geheim);
 }
 
 export interface DecodedAccessToken {
@@ -229,18 +229,22 @@ export async function verifieerAccessToken(
     issuer: ISSUER,
     audience: AUDIENCE,
     clockTolerance: 0,
-      });
+    // Expliciete allowlist tegen algoritmeverwarring. Jose weigert met een
+    // symmetrische sleutel al een asymmetrisch alg of "none", maar de aanname
+    // hoort in de code te staan en niet in het hoofd van de lezer.
+    algorithms: ['HS256'],
+  });
   const claims = uitslag.payload;
   const expSec = claims['exp'] ?? 0;
   if (klok.nu().getTime() > expSec * 1000) {
     throw new JOSEError('Token is verlopen (exp-claim)');
-      }
+  }
   return {
     sub: claims['sub'] ?? '',
     exp: expSec,
     iss: claims['iss'] ?? '',
     aud: claims['aud'] ?? [],
-      };
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -261,33 +265,44 @@ export interface TokenService {
  */
 export function maakTokenService(config: TokenServiceConfig): TokenService {
   const klok = config.klok ?? new SystemKlok();
-  const geheimeBruto =
-    config.geheim ??
-    process.env['JWT_SECRET'] ??
-      // Veilige dev-default — ZELFDE PATTERN als DATABASE_URL (spec §7.9).
-      // NOOIT in productie: daar komt het geheim uit de omgeving (chmod 600).
-      'dev-geheim-verander-dit-via-JWT_SECRET';
-  if (!geheimeBruto || geheimeBruto.length < 16) {
+  // GEEN terugvalwaarde. Een ingebakken standaardgeheim is hier iets anders dan
+  // een standaard-DATABASE_URL: een verkeerde databaseverbinding faalt hoorbaar,
+  // maar een verkeerd JWT-geheim werkt perfect — het tekent en verifieert gewoon.
+  // Staat de waarde in de repository, dan kan iedereen die de broncode of de image
+  // kan lezen een geldig token voor elke gebruiker vervalsen, zonder enig spoor.
+  // Daarom: ontbreekt het geheim, dan start de service niet (spec §8.2).
+  const geheimeBruto = config.geheim ?? process.env['JWT_SECRET'];
+  if (geheimeBruto === undefined || geheimeBruto === '') {
     throw new Error(
-       'JWT_SECRET (of config.geheim) moet minimaal 16 tekens lang zijn; ' +
-         'een te kort geheim is een beveiligingsrisico (spec §8.2).',
-        );
-    }
+      'JWT_SECRET ontbreekt. Zet een willekeurig geheim van minimaal 32 tekens in de ' +
+        'omgeving (zie .env.voorbeeld); er is bewust geen standaardwaarde.',
+    );
+  }
+  if (geheimeBruto.length < 32) {
+    throw new Error(
+      `JWT_SECRET moet minimaal 32 tekens zijn (nu ${String(geheimeBruto.length)}); ` +
+        'een kort geheim is met brute kracht te raden (spec §8.2).',
+    );
+  }
+
+  // Vastgelegd als `string` na validatie: TypeScript behoudt de versmalling niet
+  // binnen de closures hieronder.
+  const geheim: string = geheimeBruto;
   const accessTokenMinuten = config.accessTokenMinuten ?? ACCESS_MINUTEN_DEFAULT;
   const refreshDagen = config.refreshDagen ?? REFRESH_DAGEN_DEFAULT;
 
   async function geefTokensUit(
     persoon: { readonly id: bigint },
     info: ApparaatInfo,
-      ): Promise<TokensUit> {
+  ): Promise<TokensUit> {
     const nu = klok.nu();
     const ruwToken = genereerRefreshToken();
     const tokenHash = hashVanToken(ruwToken);
     const verloopt = new Date(nu.getTime() + refreshDagen * DAG_MILISECONDEN);
 
     const [rij] = await config.db
-        .insert(apparaatSessie)
-        .values({
+      .insert(apparaatSessie)
+      .values({
         persoonId: persoon.id,
         // familie_id laat de db genereren (gen_random_uuid, default).
         refreshTokenHash: tokenHash,
@@ -298,18 +313,18 @@ export function maakTokenService(config: TokenServiceConfig): TokenService {
         userAgent: info.userAgent ?? null,
         verlooptOp: verloopt,
         laatsteGebruiktOp: nu,
-        })
-        .returning({ id: apparaatSessie.id });
+      })
+      .returning({ id: apparaatSessie.id });
 
     if (!rij) {
       throw new Error('apparaat_sessie-insert leverde geen rij op');
-       }
+    }
     const accessToken = await tekenAccessToken(persoon.id, klok, {
-      geheim: geheimeBruto,
+      geheim,
       minuten: accessTokenMinuten,
-       });
+    });
     return { accessToken, refreshToken: ruwToken, sessieId: rij.id };
-     }
+  }
 
   /**
    * Bepaalt in één transactie de uitkomst van een refresh-aanbod; de
@@ -318,10 +333,10 @@ export function maakTokenService(config: TokenServiceConfig): TokenService {
    * rolt terug en zou het inname-effect ongedaan maken.
    */
   type VerfrisUitkomst =
-     | { readonly type: 'rotatie'; readonly persoonId: bigint; readonly nieuwRuw: string }
-     | { readonly type: 'verlopen' }
-     | { readonly type: 'herbruik'; readonly familieId: string }
-     | { readonly type: 'onbekend' };
+    | { readonly type: 'rotatie'; readonly persoonId: bigint; readonly nieuwRuw: string }
+    | { readonly type: 'verlopen' }
+    | { readonly type: 'herbruik'; readonly familieId: string }
+    | { readonly type: 'onbekend' };
 
   async function verfris(refreshToken: string, info: ApparaatInfo): Promise<VerfrisUit> {
     const nu = klok.nu();
@@ -330,10 +345,10 @@ export function maakTokenService(config: TokenServiceConfig): TokenService {
     const uitkomst: VerfrisUitkomst = await config.db.transaction(async (tx) => {
       // Stap 1: een ACTIEVE rij (nog niet ingetrokken) met dit refresh_token?
       const [rij] = await tx
-          .select()
-          .from(apparaatSessie)
-          .where(and(eq(apparaatSessie.refreshTokenHash, hash), isNull(apparaatSessie.ingetrokkenOp)))
-          .limit(1);
+        .select()
+        .from(apparaatSessie)
+        .where(and(eq(apparaatSessie.refreshTokenHash, hash), isNull(apparaatSessie.ingetrokkenOp)))
+        .limit(1);
 
       if (rij) {
         if (rij.verlooptOp.getTime() < nu.getTime()) {
@@ -343,58 +358,65 @@ export function maakTokenService(config: TokenServiceConfig): TokenService {
             .set({ ingetrokkenOp: nu, intrekkingReden: INTRA_VERLOPEN, laatsteGebruiktOp: nu })
             .where(eq(apparaatSessie.id, rij.id));
           return { type: 'verlopen' } as const;
-           }
+        }
 
-         // Roteren door toevoegen: een nieuwe rij in dezelfde `familie_id` met
-         // het net-geconsumeerde token in `vorige_token_hash`; de oude rij gaat
-         // ingetrokken (reden `geroteerd`). De levensduur wordt niet verlengd —
-         // de nieuwe rij erft `verloopt_op` — zodat een gestolen sessie niet
-         // oneindig verlengbaar is.
+        // Roteren door toevoegen: een nieuwe rij in dezelfde `familie_id` met
+        // het net-geconsumeerde token in `vorige_token_hash`; de oude rij gaat
+        // ingetrokken (reden `geroteerd`). De levensduur wordt niet verlengd —
+        // de nieuwe rij erft `verloopt_op` — zodat een gestolen sessie niet
+        // oneindig verlengbaar is.
         const nieuwRuw = genereerRefreshToken();
         const nieuwHash = hashVanToken(nieuwRuw);
 
         await tx
-            .update(apparaatSessie)
-            .set({
+          .update(apparaatSessie)
+          .set({
             ingetrokkenOp: nu,
             intrekkingReden: INTRA_GEROTEERD,
             laatsteGebruiktOp: nu,
-              })
-            .where(eq(apparaatSessie.id, rij.id));
-        await tx
-            .insert(apparaatSessie)
-            .values({
-            persoonId: rij.persoonId,
-            familieId: rij.familieId,
-            refreshTokenHash: nieuwHash,
-            vorigeTokenHash: hash,
-            platform: info.platform ?? rij.platform,
-            apparaatNaam: info.apparaatNaam ?? rij.apparaatNaam,
-            ipLaatste: info.ip ?? rij.ipLaatste,
-            userAgent: info.userAgent ?? rij.userAgent,
-            verlooptOp: rij.verlooptOp,
-            laatsteGebruiktOp: nu,
-              });
+          })
+          .where(eq(apparaatSessie.id, rij.id));
+        await tx.insert(apparaatSessie).values({
+          persoonId: rij.persoonId,
+          familieId: rij.familieId,
+          refreshTokenHash: nieuwHash,
+          vorigeTokenHash: hash,
+          platform: info.platform ?? rij.platform,
+          apparaatNaam: info.apparaatNaam ?? rij.apparaatNaam,
+          ipLaatste: info.ip ?? rij.ipLaatste,
+          userAgent: info.userAgent ?? rij.userAgent,
+          verlooptOp: rij.verlooptOp,
+          laatsteGebruiktOp: nu,
+        });
         return { type: 'rotatie', persoonId: rij.persoonId, nieuwRuw } as const;
-        }
+      }
 
-        // Stap 2: geen actieve rij met dit token. Bestaat het dan als een
-        // (verouderde, reeds ingetrokken) `refresh_token_hash`? Dan is het
-        // geconsumeerd — hergebruik (gestolen of hergebruikt). Trek de HELE
-        // `familie_id` in. `refresh_token_hash` is UNIQUE, dus op dit punt is
-        // er hooguit één rij met deze hash; die is per definitie reeds
-        // ingetrokken (de actieve-zoek is al mislukt).
-      const [herbruikt] = await tx.select().from(apparaatSessie).where(eq(apparaatSessie.refreshTokenHash, hash)).limit(1);
+      // Stap 2: geen actieve rij met dit token. Bestaat het dan als een
+      // (verouderde, reeds ingetrokken) `refresh_token_hash`? Dan is het
+      // geconsumeerd — hergebruik (gestolen of hergebruikt). Trek de HELE
+      // `familie_id` in. `refresh_token_hash` is UNIQUE, dus op dit punt is
+      // er hooguit één rij met deze hash; die is per definitie reeds
+      // ingetrokken (de actieve-zoek is al mislukt).
+      const [herbruikt] = await tx
+        .select()
+        .from(apparaatSessie)
+        .where(eq(apparaatSessie.refreshTokenHash, hash))
+        .limit(1);
       if (herbruikt) {
         await tx
-            .update(apparaatSessie)
-            .set({ ingetrokkenOp: nu, intrekkingReden: INTRA_HERBRUIK })
-            .where(and(eq(apparaatSessie.familieId, herbruikt.familieId), isNull(apparaatSessie.ingetrokkenOp)));
+          .update(apparaatSessie)
+          .set({ ingetrokkenOp: nu, intrekkingReden: INTRA_HERBRUIK })
+          .where(
+            and(
+              eq(apparaatSessie.familieId, herbruikt.familieId),
+              isNull(apparaatSessie.ingetrokkenOp),
+            ),
+          );
         return { type: 'herbruik', familieId: herbruikt.familieId } as const;
-        }
+      }
 
       return { type: 'onbekend' } as const;
-       });
+    });
 
     switch (uitkomst.type) {
       case 'verlopen':
@@ -405,43 +427,43 @@ export function maakTokenService(config: TokenServiceConfig): TokenService {
         throw new OnbekendTokenFout();
       case 'rotatie': {
         const accessToken = await tekenAccessToken(uitkomst.persoonId, klok, {
-          geheim: geheimeBruto,
+          geheim,
           minuten: accessTokenMinuten,
-            });
+        });
         return {
           accessToken,
           refreshToken: uitkomst.nieuwRuw,
           persoonId: uitkomst.persoonId,
-            };
-       }
-     }
+        };
+      }
     }
+  }
 
   async function trekSessieIn(sessieId: bigint): Promise<{ ingetrokken: boolean }> {
     const nu = klok.nu();
     const [geupdate] = await config.db
-        .update(apparaatSessie)
-        .set({ ingetrokkenOp: nu, intrekkingReden: INTRA_UITGELOGD })
-        .where(and(eq(apparaatSessie.id, sessieId), isNull(apparaatSessie.ingetrokkenOp)))
-        .returning({ id: apparaatSessie.id });
+      .update(apparaatSessie)
+      .set({ ingetrokkenOp: nu, intrekkingReden: INTRA_UITGELOGD })
+      .where(and(eq(apparaatSessie.id, sessieId), isNull(apparaatSessie.ingetrokkenOp)))
+      .returning({ id: apparaatSessie.id });
     return { ingetrokken: geupdate !== undefined };
-     }
+  }
 
   async function trekAlleSessiesIn(persoonId: bigint): Promise<{ ingetrokken: number }> {
     const nu = klok.nu();
     const resultaten = await config.db
-        .update(apparaatSessie)
-        .set({ ingetrokkenOp: nu, intrekkingReden: INTRA_ALLES })
-        .where(and(eq(apparaatSessie.persoonId, persoonId), isNull(apparaatSessie.ingetrokkenOp)))
-        .returning({ id: apparaatSessie.id });
+      .update(apparaatSessie)
+      .set({ ingetrokkenOp: nu, intrekkingReden: INTRA_ALLES })
+      .where(and(eq(apparaatSessie.persoonId, persoonId), isNull(apparaatSessie.ingetrokkenOp)))
+      .returning({ id: apparaatSessie.id });
     return { ingetrokken: resultaten.length };
-     }
+  }
 
   return {
-   geefTokensUit,
-   verfris,
-   trekSessieIn,
-   trekAlleSessiesIn,
-   klok,
-    };
+    geefTokensUit,
+    verfris,
+    trekSessieIn,
+    trekAlleSessiesIn,
+    klok,
+  };
 }
