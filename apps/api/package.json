@@ -9,7 +9,7 @@
     "build": "tsc -b",
     "clean": "tsc -b --clean",
     "db:migrate": "node --experimental-strip-types src/database/run-migraties.ts",
-    "db:generate": "drizzle-kit generate"
+    "db:migrate:dist": "node dist/src/database/run-migraties.js"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.0",

@@ -63,6 +63,13 @@ COPY --from=builder /repo/apps/api/dist apps/api/dist
 COPY --from=builder /repo/packages/domein/dist packages/domein/dist
 COPY --from=builder /repo/packages/contract/dist packages/contract/dist
 
+# De .sql-migraties worden door tsc niet meegekopieerd (die kopieert alleen TypeScript-
+# uitvoer). Zonder deze regel staan ze niet in de image en kan `db:migrate` in productie
+# niet draaien: de runner zoekt ze naast zijn eigen gecompileerde bestand.
+COPY --from=builder /repo/apps/api/src/database/migraties apps/api/dist/src/database/migraties
+# Migreren in de container (vanuit /repo):
+#   docker compose ... exec api node apps/api/dist/src/database/run-migraties.js
+
 # Statisch geverifieerd door de container-healthcheck (GET /health, spec §7.9).
 EXPOSE 3000
 

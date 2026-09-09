@@ -3,18 +3,16 @@
  *
  * Start per testsessie EÉN PostgreSQL-16-container op exact hetzelfde
  * image/digest als `infra/docker-compose.yml` (F02), voert de migratierunner
- * (`migraties-kern.ts`) tegen die verse container uit, en levert een
+ * (`run-migraties.ts`) tegen die verse container uit, en levert een
  * Drizzle-db op via `pg`.
  *
  * De integratietests delen de container via `gedeeldeTestDb()` en
  * stoppen haar in `afterAll`.
  *
- * LET OP: dit bestand wordt gecompileerd door `tsc -b` (apps/api is CJS,
- * `module: NodeNext`), dus géén `import.meta` — die is ESM-only.
- * De migraties-map wordt vanuit de current-working-directory opgelost
- * (de tests draaien vanuit de repo-root via de root-`npm run test`,
- * zie de F01-conventie). De CLI `run-migraties.ts` gebruikt wél
- * `import.meta` en is daarom uitgesloten van `tsc -b`.
+ * `apps/api` is een ESM-pakket (`"type": "module"`), en `run-migraties.ts` valt
+ * gewoon binnen de tsc-include voor de src-map — hij komt dus mee in `dist`.
+ * De migraties-map wordt daar opgelost ten opzichte van het scriptbestand zelf,
+ * niet ten opzichte van de working directory.
  */
 
 import { Client, Pool, type Pool as PgPool } from 'pg';
@@ -52,13 +50,13 @@ let gedeeld: TestPgDb | null = null;
 export async function gedeeldeTestDb(): Promise<TestPgDb> {
   if (gedeeld !== null) return gedeeld;
 
-  const gesteurt = await new PostgreSqlContainer(POSTGRES_IMAGE)
+  const gestart = await new PostgreSqlContainer(POSTGRES_IMAGE)
     .withDatabase(POSTGRES_DB)
     .withUsername(POSTGRES_USER)
     .withPassword(POSTGRES_PASSWORD)
     .start();
 
-  const url = gesteurt.getConnectionUri();
+  const url = gestart.getConnectionUri();
 
   // Verse container => de migratierunner voegt nu wél migraties toe.
   const { uitgevoerde } = await voerMigratiesUit(url);
@@ -76,10 +74,10 @@ export async function gedeeldeTestDb(): Promise<TestPgDb> {
     url,
     pool,
     db,
-    container: gesteurt,
+    container: gestart,
     stop: async () => {
       await pool.end();
-      await gesteurt.stop();
+      await gestart.stop();
       gedeeld = null;
     },
   };

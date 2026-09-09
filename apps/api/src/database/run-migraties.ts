@@ -18,6 +18,7 @@
  */
 
 import { Client } from 'pg';
+import { createHash } from 'node:crypto';
 import { readFileSync, readdirSync, realpathSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -58,10 +59,29 @@ const HISTORIE_DDL = [
   'CREATE TABLE IF NOT EXISTS migratie_historie (',
   '  naam            text        PRIMARY KEY,',
   '  opgevoerd_op    timestamptz NOT NULL DEFAULT now(),',
-  '  sql_leesbaar    text        NOT NULL',
+  '  sql_leesbaar    text        NOT NULL,',
+  '  checksum        text',
   ')',
   '',
 ].join('\n');
+
+// Bestaande databases (aangelegd vóór de checksumkolom) krijgen hem alsnog.
+const HISTORIE_MIGRATIE = 'ALTER TABLE migratie_historie ADD COLUMN IF NOT EXISTS checksum text';
+
+// Vaste sleutel voor de adviesvergrendeling. Twee runners tegelijk — CI naast een
+// lokale compose-start, of twee containers die opstarten — zouden anders dezelfde
+// migratie tegelijk proberen toe te passen.
+const SLOT_SLEUTEL = '831492175600411';
+
+/**
+ * sha256 van de migratie-inhoud, hex. Maakt "alleen voorwaarts" afdwingbaar: wordt
+ * een reeds toegepaste migratie later bewerkt, dan wijkt de checksum af en weigert
+ * de runner te draaien, in plaats van een database achter te laten die niet meer
+ * met de bestanden overeenkomt.
+ */
+export function checksumVan(sqlTekst: string): string {
+  return createHash('sha256').update(sqlTekst, 'utf8').digest('hex');
+}
 
 // --- Kern -------------------------------------------------------------------
 
@@ -100,23 +120,38 @@ export async function voerMigratiesUit(
   const klant = new Client({ connectionString: url });
   await klant.connect();
   try {
+    // Serialiseer gelijktijdige runs; de vergrendeling valt vanzelf weg zodra de
+    // verbinding sluit, ook wanneer dit proces halverwege sneuvelt.
+    await klant.query('SELECT pg_advisory_lock($1)', [SLOT_SLEUTEL]);
     await klant.query(HISTORIE_DDL);
-    const bestaandResultaat = await klant.query<{ naam: string }>(
-      'SELECT naam FROM migratie_historie ORDER BY naam',
+    await klant.query(HISTORIE_MIGRATIE);
+    const bestaandResultaat = await klant.query<{ naam: string; checksum: string | null }>(
+      'SELECT naam, checksum FROM migratie_historie ORDER BY opgevoerd_op, naam',
     );
-    const reedsUitgevoerd = new Set(bestaandResultaat.rows.map((r) => r.naam));
+    const reedsUitgevoerd = new Map(bestaandResultaat.rows.map((r) => [r.naam, r.checksum]));
 
     const migraties = laadMigraties(migratiesMap());
     const uitgevoerde: string[] = [];
     for (const migratie of migraties) {
-      if (reedsUitgevoerd.has(migratie.naam)) continue;
+      if (reedsUitgevoerd.has(migratie.naam)) {
+        const bekend = reedsUitgevoerd.get(migratie.naam);
+        const nu = checksumVan(migratie.sql);
+        if (bekend !== null && bekend !== undefined && bekend !== nu) {
+          throw new Error(
+            `Migratie ${migratie.naam} is gewijzigd nadat hij was toegepast ` +
+              `(verwacht ${bekend.slice(0, 12)}…, gevonden ${nu.slice(0, 12)}…). ` +
+              'Migraties zijn alleen voorwaarts: draai de wijziging terug en voeg een nieuwe migratie toe.',
+          );
+        }
+        continue;
+      }
       await klant.query('BEGIN');
       try {
         await klant.query(migratie.sql);
-        await klant.query('INSERT INTO migratie_historie (naam, sql_leesbaar) VALUES ($1, $2)', [
-          migratie.naam,
-          migratie.sql.split('\n')[0] ?? '',
-        ]);
+        await klant.query(
+          'INSERT INTO migratie_historie (naam, sql_leesbaar, checksum) VALUES ($1, $2, $3)',
+          [migratie.naam, migratie.sql.split('\n')[0] ?? '', checksumVan(migratie.sql)],
+        );
         await klant.query('COMMIT');
         uitgevoerde.push(migratie.naam);
         process.stdout.write(`[migratie] ${migratie.naam} uitgevoerd\n`);
@@ -128,7 +163,7 @@ export async function voerMigratiesUit(
       }
     }
 
-    return { uitgevoerde, bestaand: [...reedsUitgevoerd] };
+    return { uitgevoerde, bestaand: [...reedsUitgevoerd.keys()] };
   } finally {
     await klant.end();
   }
@@ -162,5 +197,12 @@ if (isHoofdbeheer) {
         `[migratie] ${String(uitgevoerde.length)} uitgevoerd: ${uitgevoerde.join(', ')}\n`,
       );
     }
-  })();
+  })().catch((fout: unknown) => {
+    // Zonder deze vangst eindigt een mislukte migratie als unhandled rejection
+    // met exitcode 0 — een falende deploy zou er dan geslaagd uitzien.
+    process.stderr.write(
+      `[migratie] afgebroken: ${fout instanceof Error ? (fout.stack ?? fout.message) : String(fout)}\n`,
+    );
+    process.exitCode = 1;
+  });
 }

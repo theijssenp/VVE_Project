@@ -338,7 +338,9 @@ map-resolutie, wat Node 22 native-type-stripping ondersteunt (via
 De `drizzle.config.ts` is bewust uit de tsc-include en de
 eslint-`project`-conjecturen:
 
-- Er is geen `drizzle-kit`-of `drizzle-kit generate`-flow in deze repo.
+- Er is geen `drizzle-kit generate`-flow in deze repo. (Bij de review bleek er
+  wél een `db:generate`-script te staan dat `drizzle-kit generate` aanriep; dat is
+  verwijderd — zie de herzieningsnotitie hieronder.)
 - De migraties worden handgeschreven; er is geen generate-flow die
   de config nodig heeft.
 - De config is een declaratief document voor een mogelijk
@@ -371,3 +373,52 @@ primaire sleutels. Een `char(2)`-id zou een typebreuk veroorzaken
 in later FK-referentie naar `persoon.id` (bijv. `rol_toewijzing`,
 `passkey.persoon_id`, `uitnodiging.aangemaakt_door`, §6.3), die
 `bigint` verwachten.
+
+### Herziening na review (09-09-2026)
+
+F03 haalde zijn DoD: `npm run lint && npm run test` groen met 21 tests, waarvan de
+integratietests tegen een echte PostgreSQL-16-container via Testcontainers, en
+`db:migrate` tweemaal gedraaid tegen een verse compose-Postgres — tweede run een no-op,
+drie tabellen aanwezig. De migraties en het Drizzle-schema komen inhoudelijk overeen met
+§6.1 en §6.3. Zes punten aangepast.
+
+1. **De migraties konden niet in de productiecontainer draaien.** `tsc` kopieert geen
+   `.sql`-bestanden naar `dist`, en `infra/api.Dockerfile` kopieert alleen `dist`. De
+   migratiebestanden zaten dus niet in de image, terwijl de gecompileerde runner ze naast
+   zijn eigen bestand zoekt. Dat was bij de live-gang (B11) aan het licht gekomen, op het
+   slechtst denkbare moment. Eén `COPY`-regel toegevoegd; geverifieerd door de image te
+   bouwen en de runner erin te draaien.
+2. **Een mislukte migratie eindigde met exitcode 0.** De CLI draaide een async IIFE zonder
+   `.catch`; een verbindings- of SQL-fout werd een unhandled rejection. Een falende deploy
+   zou er dan geslaagd uitzien. Nu een expliciete vangst die naar stderr schrijft en
+   `process.exitCode = 1` zet — in de image nagemeten.
+3. **Geen bescherming tegen het bewerken van een reeds toegepaste migratie.**
+   `migratie_historie` bewaarde alleen de naam en de eerste regel. Wie later een toegepaste
+   migratie aanpast, krijgt stilzwijgend een database die niet meer met de bestanden
+   overeenkomt. Nu een sha256 per migratie; wijkt die af, dan weigert de runner te draaien.
+   Dat is wat "alleen voorwaarts" (§7.9) afdwingbaar maakt in plaats van een afspraak.
+4. **Geen vergrendeling bij gelijktijdige runs.** Twee runners tegelijk — CI naast een
+   lokale compose-start, of twee containers die opstarten — zouden dezelfde migratie
+   tegelijk proberen toe te passen. `pg_advisory_lock` toegevoegd.
+5. **Het `db:generate`-script sprak de eigen architectuur tegen.** Dit document stelt dat
+   de handgeschreven SQL leidend is en dat er geen generate-flow bestaat, maar
+   `apps/api/package.json` had `"db:generate": "drizzle-kit generate"`. Eén run daarvan
+   zet een tweede bron van waarheid naast de migraties. Script verwijderd;
+   `db:migrate:dist` toegevoegd voor het draaien vanuit `dist`.
+6. **Een test die niets bewees.** `migraties.e2e-spec.ts` controleerde de volgorde met
+   `ORDER BY naam` — dat toont alleen aan dat '0001' alfabetisch vóór '0002' komt, niet dat
+   0001 eerder is uitgevoerd. Nu op `opgevoerd_op`, plus twee nieuwe tests voor de
+   checksumbewaking. Van 21 naar 23 tests.
+
+**Twee beweringen in dit document en één in de code klopten niet en zijn rechtgezet:** dat
+er geen `drizzle-kit generate`-flow was (punt 5); en de kop van `test/testcontainers.ts`
+die stelde dat `apps/api` CommonJS is en dat `run-migraties.ts` van `tsc -b` is uitgesloten
+— het pakket is ESM (`"type": "module"`, in ditzelfde blok toegevoegd) en de runner staat
+gewoon in `dist`.
+
+**Procesincident.** Tijdens deze review bewerkte de bouwsessie `run-migraties.ts` terwijl
+de reviewwijzigingen erin stonden. Een regelgebaseerde patch op verschoven regelnummers
+liet een niet-parseerbaar CLI-blok achter. Hersteld door terug te gaan naar de commit en de
+reviewwijzigingen opnieuw aan te brengen; de bedoeling van die bewerking (foutafhandeling
+op de IIFE) is meegenomen als punt 2. Twee sessies in één werkboom is nu aantoonbaar een
+risico, niet meer alleen een theoretisch bezwaar.
