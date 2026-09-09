@@ -683,10 +683,9 @@ Voor de first-party, single-server applicatie (§7.6) is HS256 met één
 gedeeld `JWT_SECRET` het eenvoudigst dat de eis "met omgevingsgeheim"
 toereikt: één sleutel tekenen én verifiëren, geen sleutelwissel per
 uitgave, geen publieke sleutels die aan de client moeten worden
-uitgedeeld. De keus staat als `TOKEN_ALG = 'HS256'`-constante in
-`token.ts`; de `SecretKey`-object wordt per aanroep van
-`tekenAccessToken`/`verifieerAccessToken` uit het geheim opgebouwd,
-zodat de geheime-inhoud niet in een long-lived object blijft staan.
+uitgedeeld. Per aanroep wordt de UTF-8 encoding van het geheim
+(geen langdurend object) via `TextEncoder().encode()` opgebouwd,
+dus de raw-bytes leven niet in een persistent state.
 Overstappen naar ES256 (asymmetrisch) is mogelijk zodra signing
 wordt uitgedefd van de requestpad; dat is géén eis van de spec en
 daarom nu niet gepland.
@@ -726,15 +725,14 @@ depth in productie) én expliciet via de geïnjecteerde klok
 
 ### Open punten (bewust buiten F06b)
 
-- `mislukte_pogingen`/`geblokeerd_tot` op `person` (rate limiting,
-  spec §7.6, 5 pogingen per 15 min): deelstuk 3 (F06c).
-- `zxcvbn` of grotere HIBP-lijst: zie F06a-afdelingen.
-- `needsRehash`-aansluiting bij inloggen: deelstuk 3.
-- Constante-tijdige afhandeling van corrupte token's (dummy
-  `argon2id`-hash bij onbekende hash): de huidige `verfris`
-  retourneert `OnbekendTokenFout` — een dummy-hash om het
-  tijdsverschil te minimaliseren is een verbeterings-
-  richting in F06c.
+* `mislukte_pogingen`/`geblokeerd_tot` op `persoon` (rate limiting,
+   spec §7.6, 5 pogingen per 15 min): deelstuk 3 (F06c).
+* `zxcvbn` of grotere HIBP-lijst: zie F06a-afdelingen.
+* `needsRehash`-aansluiting bij inloggen (spec §8.1): deelstuk 3.
+* Constante-tijdige afhandeling bij onbekende token (dummy-hash om
+   het tijdsverschil te minimaliseren): de huidige `verfris`
+  retourneert `OnbekendTokenFout` direct — een dummy-hash-ritueel
+  is een verbeteringsrichting in F06c.
 
 ### Tussentijdse review (09-09-2026) — F06b (token-uitgifte en refresh-rotatie)
 
