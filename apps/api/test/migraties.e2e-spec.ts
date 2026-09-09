@@ -39,7 +39,7 @@ describe('Migratierunner (F03)', () => {
     );
     const namen = rows.map((r) => r.naam);
 
-    expect(namen).toEqual(['0001_extensies_enums', '0002_vve_persoon']);
+    expect(namen).toEqual(['0001_extensies_enums', '0002_vve_persoon', '0003_rls_fundament']);
   });
 
   it('weigert te draaien als een reeds toegepaste migratie is gewijzigd', async () => {
@@ -81,8 +81,16 @@ describe('Migratierunner (F03)', () => {
     const eerste = await voerMigratiesUit(url);
     const tweede = await voerMigratiesUit(url);
 
-    expect(eerste.uitgevoerde).toEqual(['0001_extensies_enums', '0002_vve_persoon']);
+    expect(eerste.uitgevoerde).toEqual([
+      '0001_extensies_enums',
+      '0002_vve_persoon',
+      '0003_rls_fundament',
+    ]);
     expect(tweede.uitgevoerde).toEqual([]);
-    expect(tweede.bestaand).toEqual(['0001_extensies_enums', '0002_vve_persoon']);
+    expect(tweede.bestaand).toEqual([
+      '0001_extensies_enums',
+      '0002_vve_persoon',
+      '0003_rls_fundament',
+    ]);
   });
 });

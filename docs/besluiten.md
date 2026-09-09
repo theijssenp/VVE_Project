@@ -422,3 +422,35 @@ liet een niet-parseerbaar CLI-blok achter. Hersteld door terug te gaan naar de c
 reviewwijzigingen opnieuw aan te brengen; de bedoeling van die bewerking (foutafhandeling
 op de IIFE) is meegenomen als punt 2. Twee sessies in één werkboom is nu aantoonbaar een
 risico, niet meer alleen een theoretisch bezwaar.
+
+## F04 — RLS-fundament (09-09-2026)
+
+**Keuze: policy op `vve` grijpt op `id` (de tenant-sleutel), niet op een
+kolom `vve_id`.** De tabel `vve` ís de tenant; de kolom `vve_id` bestaat daar
+niet. Op alle latere tenant-tabellen (eenheden, nota's, grootboek, …) heet de
+kolom `vve_id` en volgt de policy het patroon uit §6.9 letterlijk
+(`vve_id = current_setting('app.vve_id')::bigint`).
+
+**Keuze: `persoon` krijgt géén RLS-policy op `app.vve_id`.** Personen zijn
+tenant-overstijgend (§6.3): een eigenaar kan in meerdere VvE's zitten en moet
+zich kunnen authenticeren vóór er een VvE-keuze is. RLS op `persoon` zou elke
+login onmogelijk maken. Bescherming van persoonsgegevens loopt via de
+API-autorisatie (§7.5) en de objectcontrole in de services; `rol_toewijzing`
+en de sessietabellen krijgen in F06/F08 hun eigen policies.
+
+**Keuze: `set_config(..., true)` als test-equivalent van `SET LOCAL`.**
+`SET LOCAL app.vve_id = $1` met een query-parameter is in Postgres niet mogelijk
+(structurieel, geen variabele). De productiehelper zet de instelling via
+`sql.raw` met een gevalideerd safe-integer getal; de tests gebruiken
+`set_config('app.vve_id', waarde, true)` — transactioneel equivalent.
+
+**Gevonden Postgres-gedrag vastgelegd in de tests:** een `UPDATE` op rijen van
+een ándere tenant faalt níét, maar raakt 0 rijen (USING filtert de rijen weg) —
+precies de "lege resultset"-isolatie uit §6.9. De harde fout komt van
+`WITH CHECK` bij INSERT/UPDATE die een ongeldige tenant-rij zou zetten. Beide
+gedragingen zijn afzonderlijk getest.
+
+**Grants in 0003 zijn bewust minimaal (schema-usage + rollen); tabel-grants
+(`GRANT SELECT/INSERT/... ON ALL TABLES`) zet de test-setup per rol.** In het
+echte productiepad loopt de applicatie als `vve_app` en geeft de migratie-rol
+de grants per migratie mee; dat wordt in F06/F08 verder uitgewerkt.
