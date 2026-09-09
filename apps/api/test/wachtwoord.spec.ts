@@ -4,7 +4,9 @@ import {
   beoordeelWachtwoord,
   HASH_PARAMS,
   hashWachtwoord,
-  MOINSTE_LENGTE,
+  MINSTE_LENGTE,
+  MEESTE_LENGTE,
+  moetHerhashen,
   verifieerWachtwoord,
 } from '../src/gemeenschappelijk/auth/wachtwoord.js';
 
@@ -66,14 +68,14 @@ describe('auth/wachtwoord — F06a (spec §7.6, §8.2)', () => {
     it('codeert de argon2id-parameters mee in de PHC-string (zodat een hash overleeft na een parameter-bump)', async () => {
       const hash = await hashWachtwoord('a');
       expect(hash.startsWith('$argon2id$')).toBe(true);
-       // De gebruikte parameters staan in de PHC-string, zodat een hash ook na
+      // De gebruikte parameters staan in de PHC-string, zodat een hash ook na
       // een toekomstige wijziging van HASH_PARAMS nog verifieerbaar is. De
       // exacte volgorde (m=,p=,t=) hangt af van de argon2-implementatie en
       // is niet normatief, dus testen we de onderdelen los i.p.v. één regex.
       expect(hash).toContain('m=19456');
       expect(hash).toContain('t=2');
       expect(hash).toContain('p=1');
-     });
+    });
   });
 
   describe('verifieerWachtwoord — corrupte/ongeldige hash → false (geen crash)', () => {
@@ -102,8 +104,8 @@ describe('auth/wachtwoord — F06a (spec §7.6, §8.2)', () => {
   });
 
   describe('beoordeelWachtwoord — sterktebeleid (spec §7.6)', () => {
-    it('MOINSTE_LENGTE is 12', () => {
-      expect(MOINSTE_LENGTE).toBe(12);
+    it('MINSTE_LENGTE is 12', () => {
+      expect(MINSTE_LENGTE).toBe(12);
     });
 
     it('accepteert een sterk wachtwoord ("correcte paardenspringer batterij")', () => {
@@ -154,20 +156,61 @@ describe('auth/wachtwoord — F06a (spec §7.6, §8.2)', () => {
     });
 
     it('combineert redenen: kort alleen, triviaal alleen, en kort-én-triviaal samen', () => {
-       // "abc": 3 tekens → alleen "te kort" (niet triviaal) → 1 reden.
+      // "abc": 3 tekens → alleen "te kort" (niet triviaal) → 1 reden.
       const r1 = beoordeelWachtwoord('abc');
       expect(r1.redenen.length).toBe(1);
-       // "welkom123456": 14 tekens (≥12, dus niet kort) maar kwetsbare stam
+      // "welkom123456": 14 tekens (≥12, dus niet kort) maar kwetsbare stam
       // "welkom" → alleen "veelgebruikt/triviaal" → 1 reden.
       const r2 = beoordeelWachtwoord('welkom123456');
       expect(r2.redenen.length).toBe(1);
-       // "welkom123": 9 tekens (<12, kort) ÉN kwetsbare stam → twee redenen.
+      // "welkom123": 9 tekens (<12, kort) ÉN kwetsbare stam → twee redenen.
       const r3 = beoordeelWachtwoord('welkom123');
       expect(r3.redenen.length).toBe(2);
-     });
+    });
 
     it('weigert naam-plus-jaar patronten ("vve2026", "janssen1995")', () => {
       expect(beoordeelWachtwoord('vve2026').ok).toBe(false);
     });
+  });
+});
+
+describe('wachtwoord — herhashen en lengtegrens (F06a-review)', () => {
+  it('moetHerhashen is false voor een hash met de huidige parameters', async () => {
+    const hash = await hashWachtwoord('een voldoende lang wachtwoord');
+    expect(moetHerhashen(hash)).toBe(false);
+  });
+
+  it('moetHerhashen is true voor een hash met zwakkere parameters', async () => {
+    // Zelfde bibliotheek, bewust lagere kosten — zoals een oude hash uit een
+    // eerdere parameterkeuze eruit zou zien.
+    const { hash: argon2Hash, argon2id } = await import('argon2');
+    const oud = await argon2Hash('een voldoende lang wachtwoord', {
+      type: argon2id,
+      memoryCost: 8 * 1024,
+      timeCost: 1,
+      parallelism: 1,
+    });
+    expect(moetHerhashen(oud)).toBe(true);
+  });
+
+  it('moetHerhashen is true voor een corrupte hash', () => {
+    expect(moetHerhashen('geen-geldige-phc-string')).toBe(true);
+  });
+
+  it('weigert een wachtwoord boven de lengtegrens te hashen', () => {
+    const veelTeLang = 'a'.repeat(MEESTE_LENGTE + 1);
+    expect(() => hashWachtwoord(veelTeLang)).toThrow(/langer dan/);
+  });
+
+  it('verifieert een te lang wachtwoord als onwaar zonder te rekenen', async () => {
+    const hash = await hashWachtwoord('een voldoende lang wachtwoord');
+    const veelTeLang = 'a'.repeat(MEESTE_LENGTE + 1);
+    await expect(verifieerWachtwoord(veelTeLang, hash)).resolves.toBe(false);
+  });
+
+  it('beoordeelt een te lang wachtwoord als niet ok', () => {
+    const oordeel = beoordeelWachtwoord('a'.repeat(MEESTE_LENGTE + 1));
+    expect(oordeel.ok).toBe(false);
+    expect(oordeel.redenen.join(' ')).toMatch(/langer dan/);
   });
 });

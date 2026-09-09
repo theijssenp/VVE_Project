@@ -27,7 +27,7 @@
  *   naar een grotere lokale HIBP-lijst of zxcvbn is genoteerd in `besluiten.md`.
  */
 
-import { argon2id, hash as argon2Hash, verify, type HashOptions } from 'argon2';
+import { argon2id, hash as argon2Hash, needsRehash, verify, type HashOptions } from 'argon2';
 
 // ---------------------------------------------------------------------------
 // Hashparameters
@@ -53,7 +53,16 @@ export const HASH_PARAMS: HashOptions = {
 };
 
 /** Minimale wachtwoordlengte (spec §7.6: minimaal 12 tekens). */
-export const MOINSTE_LENGTE = 12;
+export const MINSTE_LENGTE = 12;
+
+/**
+ * Maximale wachtwoordlengte. Argon2 hasht de volledige invoer, dus een
+ * verzoek met een wachtwoord van megabytes laat de server rekenen zolang de
+ * aanvaller wil — een goedkope denial-of-service tegen een dure KDF. Een
+ * ruime bovengrens sluit dat af zonder een echte gebruiker te hinderen; ook de
+ * langste wachtwoordzin blijft ver onder deze grens.
+ */
+export const MEESTE_LENGTE = 1024;
 
 // ---------------------------------------------------------------------------
 // Hashen en verifiëren
@@ -71,7 +80,31 @@ export const MOINSTE_LENGTE = 12;
  *   een normale invoer; de aanroeper moet het vangen en als serverfout behandelen).
  */
 export function hashWachtwoord(tekst: string): Promise<string> {
+  if (tekst.length > MEESTE_LENGTE) {
+    throw new Error(`Wachtwoord langer dan ${String(MEESTE_LENGTE)} tekens wordt niet gehasht.`);
+  }
   return argon2Hash(tekst, HASH_PARAMS);
+}
+
+/**
+ * Moet deze hash opnieuw worden berekend omdat hij met zwakkere parameters is
+ * gemaakt dan {@link HASH_PARAMS} nu voorschrijft? (spec §8.1: "Rehash bij
+ * inloggen als de parameters veranderd zijn.")
+ *
+ * De aanroeper is de inlogflow: die heeft op dat moment als enige het platte
+ * wachtwoord in handen en kan dus opnieuw hashen. Zonder deze stap blijven oude
+ * hashes met verouderde parameters onbeperkt staan, en levert het verhogen van
+ * de kosten alleen bescherming op voor accounts die daarna nog een nieuw
+ * wachtwoord kiezen.
+ *
+ * Bij een corrupte hash `true`: die moet hoe dan ook vervangen worden.
+ */
+export function moetHerhashen(hash: string): boolean {
+  try {
+    return needsRehash(hash, HASH_PARAMS);
+  } catch {
+    return true;
+  }
 }
 
 /**
@@ -87,12 +120,13 @@ export function hashWachtwoord(tekst: string): Promise<string> {
  * @returns `true` alleen als de hash geldig is en de afgeleide sleutel gelijk is.
  */
 export async function verifieerWachtwoord(tekst: string, hash: string): Promise<boolean> {
+  if (tekst.length > MEESTE_LENGTE) return false;
   try {
     return await verify(hash, tekst);
-   } catch {
-     // Ongeldige/corrupte hash: niet "dit wachtwoord", en we crashen niet.
+  } catch {
+    // Ongeldige/corrupte hash: niet "dit wachtwoord", en we crashen niet.
     return false;
-   }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -315,7 +349,7 @@ function isVeelGebruikt(tekst: string): boolean {
 /**
  * Beoordeelt de sterkte van een wachtwoord.
  *
- * `ok: true` alleen als het wachtwoord minimaal {@link MOINSTE_LENGTE} tekens
+ * `ok: true` alleen als het wachtwoord minimaal {@link MINSTE_LENGTE} tekens
  * heeft én niet veelgebruikt/triviaal is. Er zijn per spec §7.6 **géén
  * verplichte complexiteitsregels** (geen "minstens één hoofdletter" of
  * dergelijke) — alleen lengte en bekendheid.
@@ -325,11 +359,14 @@ function isVeelGebruikt(tekst: string): boolean {
 export function beoordeelWachtwoord(tekst: string): Beoordeling {
   const redenen: string[] = [];
 
-  if (tekst.length < MOINSTE_LENGTE) {
+  if (tekst.length < MINSTE_LENGTE) {
     redenen.push(
-       `Wachtwoord is te kort: minimaal ${String(MOINSTE_LENGTE)} tekens vereist (huidig: ${String(tekst.length)}).`,
-     );
-   }
+      `Wachtwoord is te kort: minimaal ${String(MINSTE_LENGTE)} tekens vereist (huidig: ${String(tekst.length)}).`,
+    );
+  }
+  if (tekst.length > MEESTE_LENGTE) {
+    redenen.push(`Wachtwoord is langer dan ${String(MEESTE_LENGTE)} tekens.`);
+  }
   if (isVeelGebruikt(tekst)) {
     redenen.push(
       'Wachtwoord komt voor op een lijst met veelgebruikte/zwakke wachtwoorden of past in een triviaal patroon.',

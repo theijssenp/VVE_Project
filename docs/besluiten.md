@@ -627,3 +627,32 @@ Alleen `argon2` (een native hashing-bibliotheek) mag geïmporteerd worden;
 geen `@nestjs/*`, geen `drizzle-orm`, geen `pg` — dus de code is
 echt puur. De ESLint-bans in de root config gelden niet op `apps/api`,
 dus dit wordt afdwongen via discipline in plaats van via een lint-rule.
+
+### Tussentijdse review (09-09-2026) — F06a (wachtwoordprimitieven)
+
+F06 is opgesplitst; dit is deel a. Vroegtijdig bekeken in plaats van na afronding, omdat dit
+de eerste code is die de geldstroom raakt en er anders al deelstukken bovenop worden gebouwd.
+
+De kern is goed: argon2id met expliciete parameters (19 MiB, t=2, p=1, de OWASP-2023-
+baseline), de PHC-string bewaart die parameters zodat oude hashes verifieerbaar blijven, en
+er is geen complexiteitsdwang — precies wat §7.6 vraagt. Geen `Math.random`, geen `Date.now`,
+geen netwerk, en de zwarte lijst bevat publiek referentiemateriaal, geen geheimen. Drie
+aanvullingen.
+
+1. **Geen bovengrens op de wachtwoordlengte.** Argon2 hasht de volledige invoer, dus een
+   inlogverzoek met een wachtwoord van enkele megabytes laat de server rekenen zolang de
+   aanvaller wil: een goedkope denial-of-service tegen een dure KDF. `MEESTE_LENGTE = 1024`
+   toegevoegd, afgedwongen bij hashen, verifiëren én beoordelen.
+2. **Geen rehash-primitief, terwijl §8.1 dat expliciet eist** ("Rehash bij inloggen als de
+   parameters veranderd zijn"). Zonder die stap blijven hashes met verouderde parameters
+   onbeperkt staan, en beschermt het verhogen van de kosten alleen accounts die daarna nog
+   een nieuw wachtwoord kiezen. `moetHerhashen()` toegevoegd; het aanroepen ervan in de
+   inlogflow is werk voor F06b.
+3. **`MOINSTE_LENGTE` hernoemd naar `MINSTE_LENGTE`.** Een exportnaam met een tikfout
+   verspreidt zich over elk blok dat hem importeert; nu gecorrigeerd nu het nog één
+   aanroeper heeft.
+
+Open punt, bewust niet gerepareerd: de zwarte lijst telt circa 130 ingangen. §7.6 noemt
+`zxcvbn` of een lokale HIBP-lijst; dit is verdedigbaar als eerste stap en de bouwsessie heeft
+het vervolg zelf genoteerd, maar het is dun. Een grotere lokale lijst is een
+afhankelijkheidsafweging die niet in een review thuishoort.
