@@ -553,3 +553,77 @@ domein met de implementatie in de infrastructuurlaag — precies zoals §7.3 vra
    andere nota opleveren afhankelijk van de volgorde waarin de eenheden uit de database
    kwamen. Er is een test die de eenheden omgekeerd invoegt en aantoont dat de cent alsnog
    bij het laagste ID landt.
+
+---
+
+## F06a — Wachtwoordprimitives (09-09-2026)
+
+Deelstuk 1 van F06 (spec §7.6, §8.2): de pure hashing- en sterkteprimitives in
+`apps/api/src/gemeenschappelijk/auth/`. Tokens, sessies, de inlogflow en rate
+limiting (test #29: "wachtwoord opnieuw versturen invalideert het oude
+wachtwoord én alle `apparaat_sessie`-rijen") komen in latere deelstukken.
+
+**Keuze: `argon2` als native dependency (spec §7.6 noemt `argon2id` expliciet;
+§8.2 vraagt een nieuwe dependency met regel).** `argon2` (Node-bindings op de
+libargon2-implementatie) is de in de spec genoemde, goed onderhouden
+referentie. Het is de enige externe die F06a toevoegt; de zwakkere-
+wachtwoordcheck gebruikt een lokaal ingebouwde lijst zodat er géén bredere
+afhankelijkheid (zxcvbn, HIBP-netwerk) komt. Dit respecteert §8.2
+("houd de afhankelijkhedenlijst kort"): de zwaktecheck is zelf geschreven.
+
+**Keuze: argon2id met de OWASP 2023 baselines (19 MiB, 2 iteraties,
+parallelism 1), als een aparte, gedeelde `HASH_PARAMS`-constante.**
+De spec eist "veilige defaults (memory ≥ 19 MiB, iterations ≥ 2,
+parallelism 1); kies en documenteer". Wij kiezen exact 19 MiB = `19 * 1024` KiB,
+`t=2`, `p=1` — de minimum die OWASP in de 2023-richtlijn voor interactief
+wachtwoordbeheer noemt (CPU-/GPU-resistentie met minimale latency op een
+single-server-omgeving). Parallelism 1 past bij inlog (single-user, serial);
+verhoog pas bij capaciteit. De parameters staan in één exporteerbare constante
+zodat F06b (token-uitgifte) en de tests dezelfde waarde delen en de keuze één
+plek herzienbaar is.
+
+**Keuze: de PHC-string is het enige wat in de database gaat; de parameters
+zelf zijn er ingebed.** `$argon2id$v=19$m=19456,t=2,p=1$<salt>$<hash>` bevat
+salt én het exacte parameter-recept, dus een hash blijft verifieerbaar ook nadat
+`HASH_PARAMS` in de toekomst wordt verhoogd. Er is dus geen aparte
+"parameter-kolom" nodig in `persoon.wachtwoord_hash` (spec §6.2: `text`).
+
+**Keuze: `verifieerWachtwoord` vangt een corrupte/ongeldige hash en geeft
+`false` terug, in plaats van te wrachten.** Een ongebruikte/leeggevaarde
+`wachtwoord_hash`-kolom (bv. een account dat alleen via passkey inlogt, of een
+vergeten-wachtwoord-flow waarbij de hash alsnog leeg staat) is geen
+foutmelding — het is een account waar dit wachtwoord voor niet werkt. De
+aanroeper hoeft dus elke hash niet vóórhand te valideren. De
+`argon2.verify`-implementatie wracht inderdaad op een mal-geformateerde
+string ("pchstr must contain a $ as first char"); we vangen dat expliciet in
+een `try/catch` en retourneren `false`.
+
+**Keuze: de sterktebeoordeling combineert een zwartelijst met twee
+triviaal-patronen (alleen-cijfers, naam/jaar) én een "kwetsbare stam"-check,
+zonder ruwe substring-match.**
+De spec eist "lengte ≥ 12 en niet veelgebruikt (lokale HIBP-lijst)". Wij
+voegen naast de ~100-woorden-lijst twee regexen toe (`/^\d+$/`,
+`/^[a-z0-9]{1,10}[-_ ]?(?:19|20)\d\d$/`) en een "letters-kern"-check: de
+niet-letters worden verwijderd, dan wordt de kern op `KWETSBARE_STAMMEN`
+getoetst (bv. "welkom" uit "welkom123"). De laatste check is bewust géén
+substring-match op de hele string, om valse-positives op goede wachtwoorden
+te voorkomen waar een kwetsbaar woord per toeval als substraat voorkomt.
+
+**Keuze: geen extern HIBP-netwerk en geen zxcvbn in dit deelstuk.**
+De spec §7.6 noemt "zxcvbn of een lokale HIBP-lijst" als alternatief. Wij
+kiezen de lokale route in F06a en documenteren een vervolg: een vervolg-
+blok (of een later F06b-iteratie) kan een grotere lokale HIBP-v1-lijst
+(incl. het top-10k/1M) opnemen, of `zxcvbn` introduceren — maar dat is
+geen blocking requirement voor de primitieven zelf. Een externe HIBP-API is
+bewust verboden in dit deelstuk omdat `packages/domein`- en de
+`apps/api`-modules I/O-vrij moeten blijven (§7.2) en een HIBP-netwerkcall
+daar de uitzondering is die de testbaarheid breekt.
+
+**Keuze: de primitives zijn puur en nestjs-vrij**, ook al is de
+domein-ban (§7.2 "geen NestJS, geen db, geen Date/fetch") niet van toepassing
+op `apps/api`. De reden is testbaarheid en herbruikbaarheid: de hash-functies
+moeten vanuit een test zonder de Nest-container te bouwen aanroepbaar zijn.
+Alleen `argon2` (een native hashing-bibliotheek) mag geïmporteerd worden;
+geen `@nestjs/*`, geen `drizzle-orm`, geen `pg` — dus de code is
+echt puur. De ESLint-bans in de root config gelden niet op `apps/api`,
+dus dit wordt afdwongen via discipline in plaats van via een lint-rule.
