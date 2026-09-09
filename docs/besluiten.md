@@ -725,12 +725,12 @@ depth in productie) én expliciet via de geïnjecteerde klok
 
 ### Open punten (bewust buiten F06b)
 
-* `mislukte_pogingen`/`geblokeerd_tot` op `persoon` (rate limiting,
-   spec §7.6, 5 pogingen per 15 min): deelstuk 3 (F06c).
-* `zxcvbn` of grotere HIBP-lijst: zie F06a-afdelingen.
-* `needsRehash`-aansluiting bij inloggen (spec §8.1): deelstuk 3.
-* Constante-tijdige afhandeling bij onbekende token (dummy-hash om
-   het tijdsverschil te minimaliseren): de huidige `verfris`
+- `mislukte_pogingen`/`geblokeerd_tot` op `persoon` (rate limiting,
+  spec §7.6, 5 pogingen per 15 min): deelstuk 3 (F06c).
+- `zxcvbn` of grotere HIBP-lijst: zie F06a-afdelingen.
+- `needsRehash`-aansluiting bij inloggen (spec §8.1): deelstuk 3.
+- Constante-tijdige afhandeling bij onbekende token (dummy-hash om
+  het tijdsverschil te minimaliseren): de huidige `verfris`
   retourneert `OnbekendTokenFout` direct — een dummy-hash-ritueel
   is een verbeteringsrichting in F06c.
 

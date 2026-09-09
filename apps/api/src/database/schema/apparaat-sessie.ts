@@ -17,15 +17,7 @@
  * migratie 0004 geven `vve_app` al SELECT/INSERT/UPDATE/DELETE.
  */
 
-import {
-  bigint,
-  char,
-  inet,
-  pgTable,
-  text,
-  timestamp,
-  uuid,
-} from 'drizzle-orm/pg-core';
+import { bigint, char, inet, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 import { persoon } from './persoon.js';
 
 export const apparaatSessie = pgTable('apparaat_sessie', {

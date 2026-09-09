@@ -26,9 +26,9 @@ export interface KalenderDag {
 
 /** Geïnjecteerde tijdsabstractie (spec §7.3). Zelfde vorm als `@vve/domein` `Klok`. */
 export interface Klok {
-   /** Het actuele moment, UTC (spec §7.3). */
+  /** Het actuele moment, UTC (spec §7.3). */
   nu(): Date;
-   /** De kalenderdag in Europe/Amsterdam (spec §5.8, §7.3). */
+  /** De kalenderdag in Europe/Amsterdam (spec §5.8, §7.3). */
   vandaag(): KalenderDag;
 }
 
@@ -39,25 +39,25 @@ export interface Klok {
  */
 export class SystemKlok implements Klok {
   nu(): Date {
-   return new Date();
-   }
+    return new Date();
+  }
 
   vandaag(): KalenderDag {
     // De kalenderdeel (jaar/maand/dag) in Europe/Amsterdam, zonder de tijdsdeel
     // of een conversie op te sommen — een datum is een datum (spec §5.8).
-   const deeltjes = new Intl.DateTimeFormat('en-CA', {
-     timeZone: 'Europe/Amsterdam',
-     year: 'numeric',
-     month: '2-digit',
-     day: '2-digit',
+    const deeltjes = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Europe/Amsterdam',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
     }).formatToParts(new Date());
     // en-CA levert iso-achtige 'yyyy/mm/dd' — dus direct splitbaar op '/'.
-   const tekst = deeltjes.map((d) => d.value).join('/');
-   const [jaar, maand, dag] = tekst.split('/');
-   return {
-     jaar: Number(jaar),
-     maand: Number(maand),
-     dag: Number(dag),
-     };
-   }
+    const tekst = deeltjes.map((d) => d.value).join('/');
+    const [jaar, maand, dag] = tekst.split('/');
+    return {
+      jaar: Number(jaar),
+      maand: Number(maand),
+      dag: Number(dag),
+    };
+  }
 }

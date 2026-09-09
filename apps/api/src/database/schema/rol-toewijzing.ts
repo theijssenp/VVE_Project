@@ -11,13 +11,7 @@
  */
 
 import { sql } from 'drizzle-orm';
-import {
-  bigint,
-  check,
-  date,
-  pgTable,
-  timestamp,
-} from 'drizzle-orm/pg-core';
+import { bigint, check, date, pgTable, timestamp } from 'drizzle-orm/pg-core';
 
 import { persoon } from './persoon.js';
 import { rolType } from './enums.js';

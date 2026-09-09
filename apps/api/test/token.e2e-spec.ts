@@ -314,33 +314,33 @@ describe('TokenService — geheim is verplicht (F06b-review)', () => {
   });
 
   it('start niet zonder JWT_SECRET: er is bewust geen standaardwaarde', () => {
-     const testDb = db;
+    const testDb = db;
     if (!testDb) throw new Error('geen test-db');
     delete process.env['JWT_SECRET'];
     expect(() =>
       maakTokenService({ db: testDb.db, klok: verstelbareKlok(1_700_000_000_000).klok }),
-     ).toThrow(/JWT_SECRET ontbreekt/);
-    });
+    ).toThrow(/JWT_SECRET ontbreekt/);
+  });
 
-   it('weigert een te kort geheim', () => {
-      const testDb = db;
-     if (!testDb) throw new Error('geen test-db');
-     delete process.env['JWT_SECRET'];
-     expect(() =>
-       maakTokenService({
-         db: testDb.db,
-         klok: verstelbareKlok(1_700_000_000_000).klok,
-         geheim: 'te-kort',
-        }),
-      ).toThrow(/minimaal 32 tekens/);
-     });
+  it('weigert een te kort geheim', () => {
+    const testDb = db;
+    if (!testDb) throw new Error('geen test-db');
+    delete process.env['JWT_SECRET'];
+    expect(() =>
+      maakTokenService({
+        db: testDb.db,
+        klok: verstelbareKlok(1_700_000_000_000).klok,
+        geheim: 'te-kort',
+      }),
+    ).toThrow(/minimaal 32 tekens/);
+  });
 
-   it('accepteert een geheim uit de omgeving', () => {
-     const testDb = db;
-     if (!testDb) throw new Error('geen test-db');
-     process.env['JWT_SECRET'] = 'x'.repeat(48);
-     expect(() =>
-       maakTokenService({ db: testDb.db, klok: verstelbareKlok(1_700_000_000_000).klok }),
-       ).not.toThrow();
-    });
+  it('accepteert een geheim uit de omgeving', () => {
+    const testDb = db;
+    if (!testDb) throw new Error('geen test-db');
+    process.env['JWT_SECRET'] = 'x'.repeat(48);
+    expect(() =>
+      maakTokenService({ db: testDb.db, klok: verstelbareKlok(1_700_000_000_000).klok }),
+    ).not.toThrow();
+  });
 });
