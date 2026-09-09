@@ -4,7 +4,11 @@
     "composite": true,
     "outDir": "dist",
     "rootDir": "src",
-    "types": []
+    "types": [],
+    "paths": {
+      "@vve/domein": ["./src/index.ts"],
+      "@vve/domein/*": ["./src/*"]
+    }
   },
   "include": ["src/**/*.ts"]
 }

@@ -41,7 +41,7 @@ Zonder deze blokken kan er niets anders gebouwd worden. F03 t/m F09 zijn de drag
 | F02 | Docker Compose (Postgres, API, Caddy), `.env`-structuur, secrets buiten de repo, vastgezette base images | S | F01 | §7.9, §8.2 | **klaar** |
 | F03 | Drizzle-opzet, migratierunner, Testcontainers-harnas, eerste migratie (`vve`, `persoon`) | M | F02 | §6.1, §6.3 | **klaar** |
 | F04 | RLS: rollen `vve_migratie`/`vve_app`/`vve_platform`, policies, `SET LOCAL`-transactiehelper | M | F03 | §6.9 · test 33 | **klaar** |
-| F05 | Domeinpakket financieel: `Bedrag`, `Verdeler` (grootste-restmethode), `Klok`; ESLint-regels tegen ruwe centenrekenkunde en `new Date()` | M | F01 | §5.2, §7.3 · tests 1–4 | todo |
+| F05 | Domeinpakket financieel: `Bedrag`, `Verdeler` (grootste-restmethode), `Klok`; ESLint-regels tegen ruwe centenrekenkunde en `new Date()` | M | F01 | §5.2, §7.3 · tests 1–4 | **klaar** |
 | F06 | Auth: argon2id, inloggen, JWT-access, refresh met rotatie en hergebruikdetectie, `apparaat_sessie`, apparatenlijst | L | F04 | §7.6 · test 35 | todo |
 | F07 | MFA: passkeys (SimpleWebAuthn) als primaire methode, TOTP en herstelcodes als terugval, koppeling aan geldstroomrechten | M | F06 | §7.6, §8.5 | todo |
 | F08 | `AuthGuard`, `TenantGuard`, `RolGuard`, Zod-validatiepipe met `.strict()`, opstarttest op rechtdeclaraties | M | F06 | §7.5 · tests 30, 32 | todo |
@@ -180,7 +180,7 @@ AES-GCM.
 | | Aantal |
 |---|---|
 | Blokken totaal | 71 |
-| Klaar | 4 |
+| Klaar | 5 |
 | Bezig | 0 |
 
 Statuswaarden: `todo` · `bezig` · `klaar` · `overgeslagen`.

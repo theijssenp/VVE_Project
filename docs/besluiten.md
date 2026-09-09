@@ -491,3 +491,37 @@ DELETE` uitdeelde. Een groen vinkje dekte daarmee precies het gat dat het moest
 
 Verder faalde `npm run format:check` op twee F04-bestanden; die stap is sinds de
 F02-review blokkerend in CI, dus deze commit zou daar zijn gestrand. Geformatteerd.
+
+## F05 — Domeinpakket financieel (09-09-2026)
+
+**Keuze: `Bedrag` met een privé-constructor die uitsluitend veilige gehele
+centen accepteert (spec §7.3).** Geen enkele pad kan een float of NaN
+binnenlaten: `vanCenten`, `vanInvoer` en de operaties bewaken
+`Number.MAX_SAFE_INTEGER`. `maal(factor)` accepteert alleen gehele factoren —
+1,5× een bedrag is geen geldige geldoperatie; verdeling gaat via de
+`Verdeler` (grootste-restmethode, al geborgd in F01 als `verdeelGrootsteRest`).
+
+**Keuze: parser weigert dubbelzinnige notatie in plaats van te gokken.**
+"1.234.567" (punten zonder komma) is niet te onderscheiden van een decimale
+punt-notatie met meerdere groepen en wordt geweigerd; "1.234,56" (punt als
+duizendtal + komma) is eenduidig en wordt geaccepteerd. Presentatie volgt
+§5.1: `€ 1.234,56`, negatief als `-€ 12.345,67`.
+
+**Keuze: `Klok` als interface in het domein, implementatie in de
+infrastructuurlaag.** `nu()` geeft UTC; `vandaag()` geeft een `KalenderDag`
+(jaar/maand/dag) zonder tijdzoneconversie — kalenderdata zijn `date` (§5.8).
+De Date-ban in het domeinpakket geldt vanaf nu alleen op productiecode; een
+`*.spec.ts`-klok mag een concrete `Date` maken om zichzelf vast te zetten.
+
+**Keuze: de cent-rekenkunderegel als eigen ESLint-plugin in de flat config**
+(`vve/cent-rekenkunde`). Ze vlagt `+ - * / %`, compound-assignments en
+`++/--` op identifiers of properties die op `_cent`/`_centen`/`Cent` eindigen,
+over de hele repo. Vrijstelling alleen voor `packages/domein/src/financieel/**` —
+dát is de plek waar de centen wél bewust worden gedaan (de Bedrag-implementatie
+zelf). Dit maakt de spec-eis "Bedrag afdwingbaar in plaats van een suggestie"
+(§7.3) werkelijkheid.
+
+**Keuze: dubbele importroute op de barrel.** `@vve/domein` exporteert zowel
+de namespaced vorm (`financieel.Bedrag`, zoals de F01-test al gebruikte) als
+de vlakke vorm (`Bedrag` topniveau). Nieuwe code kiest één stijl; de vlakke
+vorm is de aanbevolen voor nieuwe modules.
