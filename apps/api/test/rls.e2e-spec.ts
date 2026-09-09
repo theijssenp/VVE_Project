@@ -63,12 +63,11 @@ describe('RLS-fundament (F04, §6.9)', () => {
       for (const rol of ['vve_migratie', 'vve_app', 'vve_platform']) {
         await setup.query(`ALTER ROLE ${rol} LOGIN PASSWORD '${rol}'`);
       }
-      // vve_app mag de tabellen lezen/schrijven (grants staan in 0003 op schema-niveau;
-      // tabel-grants zet de eigenaar hier expliciet):
-      await setup.query(
-        'GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO vve_app',
-      );
-      await setup.query('GRANT SELECT ON ALL TABLES IN SCHEMA public TO vve_platform');
+      // Bewust GEEN grants hier. LOGIN en wachtwoord moeten wel: die horen als
+      // geheim niet in een migratie. De tabelrechten komen uit migratie 0004 —
+      // deelt de testopzet ze zelf uit, dan slaagt deze suite ook wanneer de
+      // migratie de applicatierol machteloos achterlaat, en dekt het groene
+      // vinkje precies het gat dat het zou moeten aantonen.
     } finally {
       await setup.end();
     }
@@ -76,7 +75,11 @@ describe('RLS-fundament (F04, §6.9)', () => {
 
   it('migratie 0003 draaide: drie rollen met de juiste attributen', async () => {
     if (!db) throw new Error('beforeAll slaagde niet: geen test-db');
-    const { rows } = await db.pool.query<{ rolname: string; rolbypassrls: boolean; rolcanlogin: boolean }>(
+    const { rows } = await db.pool.query<{
+      rolname: string;
+      rolbypassrls: boolean;
+      rolcanlogin: boolean;
+    }>(
       "SELECT rolname, rolbypassrls, rolcanlogin FROM pg_roles WHERE rolname LIKE 'vve_%' ORDER BY rolname",
     );
     const opNaam = new Map(rows.map((r) => [r.rolname, r]));
@@ -154,10 +157,10 @@ describe('RLS-fundament (F04, §6.9)', () => {
       await klant.query('UPDATE vve SET plaats = $1 WHERE id = $2', ['Amsterdam', a.id]);
       // Schrijven naar B: USING filtert de rij weg, dus UPDATE raakt 0 rijen —
       // dat is de isolatie als lege resultset (§6.9), geen fout.
-      const { rowCount: geraakt } = await klant.query(
-        'UPDATE vve SET plaats = $1 WHERE id = $2',
-        ['X', b.id],
-      );
+      const { rowCount: geraakt } = await klant.query('UPDATE vve SET plaats = $1 WHERE id = $2', [
+        'X',
+        b.id,
+      ]);
       expect(geraakt).toBe(0);
       // WITH CHECK blokkeert hard: een INSERT door vve_app maakt een rij met een
       // vers identity-id dat onmogelijk gelijk is aan app.vve_id — row-level
@@ -204,7 +207,8 @@ describe('RLS-fundament (F04, §6.9)', () => {
 
   it('de transactiehelper zet de instelling en leest haar terug', async () => {
     if (!db) throw new Error('beforeAll slaagde niet: geen test-db');
-    const { inTenantTransactie } = await import('../src/gemeenschappelijk/tenant/tenant-context.js');
+    const { inTenantTransactie } =
+      await import('../src/gemeenschappelijk/tenant/tenant-context.js');
     const { rows: alle } = await db.pool.query<{ id: string; naam: string }>(
       'SELECT id, naam FROM vve ORDER BY id',
     );

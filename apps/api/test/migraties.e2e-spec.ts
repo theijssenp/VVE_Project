@@ -15,9 +15,14 @@ import { Client } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { gedeeldeTestDb, legeDatabaseUrl, type TestPgDb } from './testcontainers.js';
-import { voerMigratiesUit } from '../src/database/run-migraties.js';
+import { laadMigraties, migratiesMap, voerMigratiesUit } from '../src/database/run-migraties.js';
 
 describe('Migratierunner (F03)', () => {
+  // Uit de bestanden afgeleid, niet hardgecodeerd: anders breekt elke nieuwe
+  // migratie deze suite en verleidt dat tot het bijwerken van de verwachting
+  // in plaats van het lezen ervan.
+  const verwachteNamen = laadMigraties(migratiesMap()).map((m) => m.naam);
+
   let db: TestPgDb | undefined;
 
   beforeAll(async () => {
@@ -39,7 +44,7 @@ describe('Migratierunner (F03)', () => {
     );
     const namen = rows.map((r) => r.naam);
 
-    expect(namen).toEqual(['0001_extensies_enums', '0002_vve_persoon', '0003_rls_fundament']);
+    expect(namen).toEqual(verwachteNamen);
   });
 
   it('weigert te draaien als een reeds toegepaste migratie is gewijzigd', async () => {
@@ -81,16 +86,8 @@ describe('Migratierunner (F03)', () => {
     const eerste = await voerMigratiesUit(url);
     const tweede = await voerMigratiesUit(url);
 
-    expect(eerste.uitgevoerde).toEqual([
-      '0001_extensies_enums',
-      '0002_vve_persoon',
-      '0003_rls_fundament',
-    ]);
+    expect(eerste.uitgevoerde).toEqual(verwachteNamen);
     expect(tweede.uitgevoerde).toEqual([]);
-    expect(tweede.bestaand).toEqual([
-      '0001_extensies_enums',
-      '0002_vve_persoon',
-      '0003_rls_fundament',
-    ]);
+    expect(tweede.bestaand).toEqual(verwachteNamen);
   });
 });

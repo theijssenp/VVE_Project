@@ -454,3 +454,40 @@ gedragingen zijn afzonderlijk getest.
 (`GRANT SELECT/INSERT/... ON ALL TABLES`) zet de test-setup per rol.** In het
 echte productiepad loopt de applicatie als `vve_app` en geeft de migratie-rol
 de grants per migratie mee; dat wordt in F06/F08 verder uitgewerkt.
+
+### Herziening na review (09-09-2026) — F04
+
+De policies en de tenanthelper zijn correct: `FORCE ROW LEVEL SECURITY` staat aan,
+`USING` én `WITH CHECK` zijn gezet, `current_setting` zonder tweede parameter maakt het
+fail closed, en `SET LOCAL` binnen de transactie is de juiste vorm voor pooling in
+transaction-modus. Ook de keuze om `persoon` géén tenant-policy te geven is goed
+onderbouwd: je moet een persoon kunnen lezen vóórdat er een VvE-keuze is. Drie punten.
+
+1. **De applicatierol was onbruikbaar, en de tests verhulden dat.** Migratie 0003 gaf
+   `vve_app` alleen `GRANT USAGE ON SCHEMA` — geen enkel tabelrecht — en liet de rol op
+   `NOLOGIN`. Nagemeten op een verse database: `rolcanlogin = f` en nul privileges op
+   `vve`. De RLS-suite slaagde omdat `beforeAll` zichzelf `GRANT SELECT, INSERT, UPDATE,
+DELETE` uitdeelde. Een groen vinkje dekte daarmee precies het gat dat het moest
+   aantonen. Migratie `0004_rls_grants.sql` toegevoegd met de tabelrechten plus
+   `ALTER DEFAULT PRIVILEGES` voor latere tabellen; de grants zijn uit de testopzet
+   verwijderd zodat de suite op de migratie steunt. `LOGIN` en wachtwoord blijven bewust
+   buiten de migratie — dat zijn geheimen (§8.2) — en zijn een operatorstap.
+
+2. **In de huidige configuratie beschermt RLS niets.** De applicatie verbindt met
+   `DATABASE_URL`, en dat is de Postgres-superuser uit `infra/docker-compose.yml`.
+   Een superuser omzeilt RLS volledig, ook met `FORCE`. Aangetoond op een verse database:
+   als superuser geeft `SELECT count(*) FROM vve` zonder gezette `app.vve_id` gewoon beide
+   tenantrijen; als niet-superuser faalt dezelfde query met
+   `unrecognized configuration parameter "app.vve_id"`.
+   **Harde eis voor F05 en verder: de applicatie verbindt als een rol met
+   `vve_app`-lidmaatschap, nooit als eigenaar of superuser.** Anders zijn de policies
+   decoratie. Na 0004 is dat pad geverifieerd: binnen tenant 1 ziet de rol 1 van 2 rijen,
+   buiten een tenantcontext faalt de query, en een insert buiten de tenant wordt door
+   `WITH CHECK` geweigerd.
+
+3. **De migratietests hardcodeerden de volledige migratielijst.** Elke nieuwe migratie
+   brak ze, wat uitnodigt tot het bijwerken van de verwachting in plaats van het lezen
+   ervan. De verwachting wordt nu uit de bestanden afgeleid.
+
+Verder faalde `npm run format:check` op twee F04-bestanden; die stap is sinds de
+F02-review blokkerend in CI, dus deze commit zou daar zijn gestrand. Geformatteerd.

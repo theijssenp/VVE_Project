@@ -6,19 +6,16 @@ nodig verbeterd, en apart gecommit (bericht `FXX-review: ...`).
 
 ## Huidig doel
 
-**F04** — RLS: rollen `vve_migratie` / `vve_app` / `vve_platform`, policies per
-tenant-tabel, en de `SET LOCAL app.vve_id`-transactiehelper. Status: **nog niet gestart**.
+**F05** — Domeinpakket financieel: `Bedrag`, `Verdeler` (grootste-restmethode), `Klok`,
+plus de ESLint-regels tegen ruwe centenrekenkunde en `new Date()`. Status: **nog niet
+gestart**.
 
-Klaar-signaal — alle drie moeten gelden:
+Klaar-signaal: een commit die met `F05:` begint of `F05 klaar` bevat, een `Bedrag`- en
+`Klok`-implementatie in `packages/domein/src/financieel/`, en een schone werkboom.
 
-1. een commit waarvan het bericht met `F04:` begint of `F04 klaar` bevat;
-2. een migratie die de rollen en policies aanlegt, plus een tenanthelper in
-   `apps/api/src/gemeenschappelijk/tenant/`;
-3. de werkboom is schoon, op bestanden van een volgend blok in uitvoering na.
-
-Extra aandacht bij dit blok: het is het zwaarste van fase 0 om te controleren. Test 33 uit
-§11 moet er zijn — RLS zelfstandig toetsen met de applicatiescoping bewust uitgeschakeld —
-en een query zonder gezette `app.vve_id` moet hard falen in plaats van stil alles te tonen.
+Aandacht: §11 tests 1–4 bestaan al (F01-review) tegen `verdeelGrootsteRest`. F05 moet die
+functie achter `Bedrag`/`Verdeler` zetten zonder de bewezen afrondingsregel te veranderen;
+de bestaande tests moeten blijven gelden.
 
 ## Werkwijze per blok
 
