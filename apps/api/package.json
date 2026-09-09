@@ -1,27 +1,35 @@
 {
   "name": "@vve/api",
+  "type": "module",
   "version": "0.0.0",
   "private": true,
   "main": "dist/main.js",
   "scripts": {
     "start": "node dist/main.js",
     "build": "tsc -b",
-    "clean": "tsc -b --clean"
+    "clean": "tsc -b --clean",
+    "db:migrate": "node --experimental-strip-types src/database/run-migraties.ts",
+    "db:generate": "drizzle-kit generate"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.0",
     "@nestjs/core": "^11.0.0",
     "@nestjs/platform-express": "^11.0.0",
+    "@types/pg": "^8.23.1",
     "@vve/contract": "*",
+    "drizzle-orm": "^0.45.2",
+    "pg": "^8.23.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1"
   },
   "devDependencies": {
     "@nestjs/testing": "^11.0.0",
+    "@testcontainers/postgresql": "^12.1.0",
     "@types/express": "^5.0.0",
     "@types/node": "^22.10.0",
     "@types/supertest": "^6.0.0",
     "supertest": "^7.0.0",
+    "testcontainers": "^12.1.0",
     "typescript": "^5.9.0"
   }
 }

@@ -286,3 +286,88 @@ het 39-tekens wachtwoord uit `.env` werkt over TCP, en de toegangslogs staan er 
 - **Digest is een manifest-list digest** (niet een platform-specifiek SHA). Dit is de
   standaard Docker-praktijk: één digest voor zowel ARM64 als AMD64; Docker selecteert
   lokaal het juiste archief.
+
+## F03 — Drizzle-operatie, migratierunner, Testcontainers-harnas en schema vve/persoon
+
+(08-09-2026)
+
+### Migratiestrategie
+
+De migraties zijn **handgeschreven SQL** — de migraties zijn leidend, de
+Drizzle-schema is de typeveilige tegenpartij. De SQL in
+`apps/api/src/database/migraties/*.sql` wordt gedraaid door
+`run-migraties.ts`, een pure Node-js-CLI die zelf een `migratie_historie`-tabel
+legt en elke migratie in een eigen transactie uitvoert (BEGIN/COMMIT). Dit
+biedt:
+
+- **Idempotentiteit**: tweede `db:migrate`-run levert nul nieuwe rijen op;
+  bewezen door `migraties.e2e-spec.ts` tegen een verse Postgres-16-container.
+- **Geen kip-ei**: de historie-tabel wordt aangelegd via DDL
+  (`CREATE TABLE IF NOT EXISTS migratie_historie`), vóór de eerste migratie
+  zich in de historietabel inschrijft.
+- **Geen drift between schema en migraties**: de testcontainers-helper
+  gebruikt dezelfde `voerMigratiesUit(url)`-functie uit `run-migraties.ts`;
+  de schema's (`src/database/schema/*.ts`) worden niet door drizzle-kit
+  gegenereerd, maar handgeschreven als typeveilige tegenpartij.
+
+### `apps/api` op ESM (latente F01-productiebrek gefixt)
+
+De compiler-uitvoer `dist/src/main.js` bevatte al ESM-`import`-statements
+(NodeNext `tsc` met `NodeNext`-module), maar `apps/api/package.json`
+mistte `"type": "module"` — dus `node dist/main.js` zou op productie
+een `ERR_MODULE_NOT_FOUND` geven (Node interpreteerde het als CommonJS).
+Dit F03-work voegde dit veld toe; `node --check apps/api/dist/src/main.js`
+bevestigt de syntactische ESM. Dit is een F03-fout, niet een F01-fout;
+F01-testte alleen de health-check (die werkt via NestJS, niet via
+`node dist/main.js` rechtstreeks).
+
+### `drizzle.config.ts` en de ESM-migratierunner
+
+De migratierunner (`run-migraties.ts`) gebruikt `import.meta.url` voor
+map-resolutie, wat Node 22 native-type-stripping ondersteunt (via
+`--experimental-strip-types`). Dit is bewust ESM:
+
+- `import.meta.url` is de canonieke ESM-construct voor bestand-referentie.
+  CommonJS-`__dirname` is geen goede oplossing in een monorepo waar het
+  bestand vanuit meerdere plekken wordt gedraaid (npm-script van
+  `apps/api`, of direct via `node`).
+- De map-resolutie is **relatief ten opzichte van het scriptbestand**
+  (niet ten opzichte van de working directory), zodat de script
+  dezelfde bestanden pakt ongeacht vandaar waar hij start.
+
+De `drizzle.config.ts` is bewust uit de tsc-include en de
+eslint-`project`-conjecturen:
+
+- Er is geen `drizzle-kit`-of `drizzle-kit generate`-flow in deze repo.
+- De migraties worden handgeschreven; er is geen generate-flow die
+  de config nodig heeft.
+- De config is een declaratief document voor een mogelijk
+  toekomstige `drizzle-kit generate`-run; hij is geen product-code.
+
+### `Testcontainers`-harnas
+
+Het harnas (`apps/api/test/testcontainers.ts`) start een
+Postgres-16-container op het **exacte zelfde image/digest** als
+`infra/docker-compose.yml`:
+
+```
+postgres:16-alpine@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685
+```
+
+De container draait lokaal op een willekeurige poort (testcontainers
+kiest ze zelf, geëxposeerd via de connection URI). De
+`gedeeldeTestDb()`-helper cacheert de container per
+test-suite (één container gedeeld door `beforeAll`/`afterAll`),
+zodat er per `it`-blok geen starttijd is. `stop()` in `afterAll`
+stopt de container, zodat een volgende test-suite een frisse container
+krijgt.
+
+### `persoon.id` als `bigint GENERATED ALWAYS AS IDENTITY`
+
+De `persoon.id` is een `bigint GENERATED ALWAYS AS IDENTITY`, niet
+`char(2)`. Dit is consistent met de vve-id, en met de spec §6.3
+die `bigint GENERATED ALWAYS AS IDENTITY` voorschrijft voor
+primaire sleutels. Een `char(2)`-id zou een typebreuk veroorzaken
+in later FK-referentie naar `persoon.id` (bijv. `rol_toewijzing`,
+`passkey.persoon_id`, `uitnodiging.aangemaakt_door`, §6.3), die
+`bigint` verwachten.

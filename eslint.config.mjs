@@ -20,6 +20,7 @@ export default tseslint.config(
       '*.config.js',
       '*.config.mjs',
       '*.config.ts',
+      'apps/api/drizzle.config.ts',
     ],
   },
   js.configs.recommended,
