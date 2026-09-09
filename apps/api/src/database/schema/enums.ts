@@ -27,3 +27,16 @@ export const modelreglement = pgEnum('modelreglement', [
 ] as const);
 
 export const communicatieWijze = pgEnum('communicatie_wijze', ['email', 'post', 'beide'] as const);
+
+// Blok F06b: roltypen voor `rol_toewijzing` (spec §6.1 / §6.3).
+export const rolType = pgEnum('rol_type', [
+  'applicatiebeheerder',
+  'beheerder',
+  'voorzitter',
+  'penningmeester',
+  'secretaris',
+  'bestuurslid',
+  'kascommissie',
+  'eigenaar',
+  'bewoner',
+] as const);
