@@ -11,3 +11,5 @@ export {
 } from './financieel/bedrag.js';
 export { somCenten, verdeelGrootsteRest } from './financieel/delen.js';
 export type { Klok, KalenderDag } from './financieel/klok.js';
+export { grootsteRestVerdeler } from './financieel/verdeler.js';
+export type { Verdeler, EenheidId } from './financieel/verdeler.js';

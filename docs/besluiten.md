@@ -525,3 +525,31 @@ zelf). Dit maakt de spec-eis "Bedrag afdwingbaar in plaats van een suggestie"
 de namespaced vorm (`financieel.Bedrag`, zoals de F01-test al gebruikte) als
 de vlakke vorm (`Bedrag` topniveau). Nieuwe code kiest één stijl; de vlakke
 vorm is de aanbevolen voor nieuwe modules.
+
+### Herziening na review (09-09-2026) — F05
+
+`Bedrag` is zorgvuldig gebouwd: privéconstructor, veilige-integercontrole op elke bewerking,
+gehele factor bij `maal`, en een `parseInvoer` die "1.234" (drie decimalen) liever weigert
+dan gokt of het duizendtallen of decimalen zijn. `Klok` staat als puur interface in het
+domein met de implementatie in de infrastructuurlaag — precies zoals §7.3 vraagt. Twee punten.
+
+1. **De centrekenkunderegel miste juist de vorm die het schema gebruikt.** De regex was
+   `/(_cent|_centen|Centen?)$/`. Dat `Centen?` betekent "Cente" met een optionele "n" — het
+   matcht `Centen` en `Cente`, maar **niet** `Cent`. En dat is exact de vorm van de
+   Drizzle-velden: `herbouwwaardeCent`, `bedragCent`, `exploitatieCent`, `reservefondsCent`.
+   Gemeten met een probe: van vier rekenkundige uitdrukkingen op centvelden vuurde er één.
+   Een guard die aanstaat, groen meldt en het merendeel mist is schadelijker dan geen guard,
+   want hij schept vertrouwen. Regex nu `/(_cent(en)?|Cent(en)?)$/`; opnieuw gemeten: drie
+   van drie, terwijl `percent`, `docent` en vergelijkingen (`>`) terecht ongemoeid blijven.
+2. **`Verdeler` ontbrak.** De blokomschrijving noemt `Bedrag`, `Verdeler` én `Klok`; alleen
+   de eerste en de laatste zijn gebouwd. Zonder die interface verzint elke aanroeper (G03
+   verdeelsleutels, G05 bijdrageschema) zijn eigen conversie tussen `Bedrag` en kale
+   getallen — precies wat het waardetype moest voorkomen. Toegevoegd als dun omhulsel om
+   `verdeelGrootsteRest`, dat ongewijzigd blijft: die functie is al bewezen tegen §11
+   tests 1–4 en tegen een exacte BigInt-referentie.
+
+   Eén ontwerpkeuze daarbij: de restcent gaat bij gelijke fractie naar het **laagste
+   eenheid-ID**, niet naar de invoegvolgorde van de `Map`. Anders zou dezelfde begroting een
+   andere nota opleveren afhankelijk van de volgorde waarin de eenheden uit de database
+   kwamen. Er is een test die de eenheden omgekeerd invoegt en aantoont dat de cent alsnog
+   bij het laagste ID landt.

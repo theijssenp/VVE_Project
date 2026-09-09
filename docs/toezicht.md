@@ -6,16 +6,19 @@ nodig verbeterd, en apart gecommit (bericht `FXX-review: ...`).
 
 ## Huidig doel
 
-**F05** — Domeinpakket financieel: `Bedrag`, `Verdeler` (grootste-restmethode), `Klok`,
-plus de ESLint-regels tegen ruwe centenrekenkunde en `new Date()`. Status: **nog niet
-gestart**.
+**F06** — Auth: argon2id, inloggen, JWT-access, refresh met rotatie en hergebruikdetectie,
+`apparaat_sessie`, apparatenlijst. Status: **nog niet gestart**.
 
-Klaar-signaal: een commit die met `F05:` begint of `F05 klaar` bevat, een `Bedrag`- en
-`Klok`-implementatie in `packages/domein/src/financieel/`, en een schone werkboom.
+Klaar-signaal: een commit die met `F06:` begint of `F06 klaar` bevat, een migratie voor
+`apparaat_sessie`, auth-code in `apps/api/src/gemeenschappelijk/auth/`, en een schone werkboom.
 
-Aandacht: §11 tests 1–4 bestaan al (F01-review) tegen `verdeelGrootsteRest`. F05 moet die
-functie achter `Bedrag`/`Verdeler` zetten zonder de bewezen afrondingsregel te veranderen;
-de bestaande tests moeten blijven gelden.
+Aandacht bij dit blok — het raakt de geldstroom, dus hier gelden de patronen uit blok F12:
+`Math.random()` of `Date.now()` als entropiebron, modulo-bias in een tekenalfabet, een
+gegenereerd wachtwoord of token dat in een log- of auditpad belandt, een omgevingsvlag die
+authenticatie omzeilt, ongehasht opgeslagen tokens (§6.3 schrijft `token_hash` voor), en
+tijdsafhankelijke tokenvergelijking in plaats van `timingSafeEqual`. Verder: test 29 en 35
+uit §11 (opnieuw versturen invalideert alle sessies; hergebruik van een refresh token trekt
+de hele familie in).
 
 ## Werkwijze per blok
 

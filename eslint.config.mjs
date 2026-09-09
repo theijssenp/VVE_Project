@@ -15,7 +15,9 @@ import * as tseslint from 'typescript-eslint';
 // ---------------------------------------------------------------------------
 // Eigen regel: geen rekenkunde op centvelden (F05, spec §7.3).
 // ---------------------------------------------------------------------------
-const CENT_NAAM = /(_cent|_centen|Centen?)$/;
+// `Centen?` matchte "Cente"/"Centen" maar NIET "Cent" — juist de vorm die het
+// Drizzle-schema gebruikt (herbouwwaardeCent, bedragCent, exploitatieCent).
+const CENT_NAAM = /(_cent(en)?|Cent(en)?)$/;
 
 const centRekenVerbod = {
   meta: {
