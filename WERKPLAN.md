@@ -180,7 +180,7 @@ AES-GCM.
 | | Aantal |
 |---|---|
 | Blokken totaal | 71 |
-| Klaar | 1 |
+| Klaar | 3 |
 | Bezig | 0 |
 
 Statuswaarden: `todo` · `bezig` · `klaar` · `overgeslagen`.
