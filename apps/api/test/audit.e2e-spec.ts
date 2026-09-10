@@ -34,9 +34,7 @@ describe('Auditlog met hashketen (F09, §6.8)', () => {
 
   beforeAll(async () => {
     db = await gedeeldeTestDb();
-    const { maakAuditService } = await import(
-      '../src/gemeenschappelijk/audit/audit-service.js'
-    );
+    const { maakAuditService } = await import('../src/gemeenschappelijk/audit/audit-service.js');
     audit = maakAuditService({ db: db.db });
   });
 
@@ -99,7 +97,7 @@ describe('Auditlog met hashketen (F09, §6.8)', () => {
     // Intakte keten eerst:
     await expect(audit.verifieerKeten()).resolves.toBeTruthy();
     // De aanval:UPDATE de gebeurtenis van deze rij (manipulatie).
-    await db.pool.query("UPDATE audit_log SET details = $1 WHERE id = $2", [
+    await db.pool.query('UPDATE audit_log SET details = $1 WHERE id = $2', [
       JSON.stringify({ origineel: false, vervalsing: true }),
       String(rij.id),
     ]);
@@ -141,7 +139,7 @@ describe('Auditlog met hashketen (F09, §6.8)', () => {
     const url = new URL(db.url);
     url.username = 'vve_app';
     url.password = 'vve_app';
-    const setup = new ((await import('pg')).Client)({ connectionString: db.url });
+    const setup = new (await import('pg')).Client({ connectionString: db.url });
     await setup.connect();
     try {
       await setup.query("ALTER ROLE vve_app LOGIN PASSWORD 'vve_app'");
@@ -170,5 +168,42 @@ describe('Auditlog met hashketen (F09, §6.8)', () => {
     } finally {
       await klant.end();
     }
+  });
+
+  it('gelijktijdige registraties vertakken de keten niet (review F09)', async () => {
+    if (!db) throw new Error('geen test-db');
+    const dienst = maakAuditService({ db: db.db });
+
+    // Het auditlog wordt bij elke muterende request geschreven (§7.5 stap 7), dus
+    // gelijktijdigheid is het normale geval. Zonder serialisatie lazen alle
+    // schrijvers dezelfde kop en kreeg elke rij dezelfde `vorige_hash`.
+    await Promise.all(
+      Array.from({ length: 20 }, (_, i) =>
+        dienst.registreer({
+          vveId: null,
+          persoonId: null,
+          gebeurtenis: `gelijktijdig.${String(i)}`,
+          categorie: 'app',
+        }),
+      ),
+    );
+
+    // Meet de linearatie van de eigen rijen direct: elke schakel moet naar de
+    // `eigen_hash` van zijn voorganger wijzen. Tellen over de hele tabel zou
+    // meeliften op de rijen die de sabotagetests hierboven bewust achterlaten.
+    const { rows } = await db.pool.query<{ v: string | null; e: string }>(
+      `SELECT vorige_hash AS v, eigen_hash AS e FROM audit_log
+       WHERE gebeurtenis LIKE 'gelijktijdig.%' ORDER BY id`,
+    );
+    expect(rows).toHaveLength(20);
+    for (let k = 1; k < rows.length; k += 1) {
+      expect(rows[k]?.v, `schakel ${String(k)} wijst niet naar zijn voorganger`).toBe(
+        rows[k - 1]?.e,
+      );
+    }
+
+    // Bewust géén verifieerKeten() hier: de sabotagetests hierboven hebben de
+    // keten opzettelijk gebroken om hun detectie aan te tonen. Dat die detectie
+    // werkt is daar al vastgelegd; deze test gaat alleen over gelijktijdigheid.
   });
 });

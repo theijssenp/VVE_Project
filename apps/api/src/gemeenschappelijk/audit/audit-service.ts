@@ -16,10 +16,17 @@
 
 import { createHash } from 'node:crypto';
 
-import { desc } from 'drizzle-orm';
+import { desc, sql } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import { auditLog } from '../../database/schema/audit-log.js';
+
+/**
+ * Vaste sleutel voor de adviesvergrendeling rond het aanvullen van de keten.
+ * Transactiegebonden: hij valt weg bij COMMIT of ROLLBACK, ook wanneer het
+ * proces halverwege sneuvelt.
+ */
+const AUDIT_SLOT_SLEUTEL = 700_913_442_118_07;
 
 /** De toegestane categorieën — gelijk aan de §7.9-logkanalen. */
 export const CATEGORIEEN = ['app', 'financieel', 'beveiliging'] as const;
@@ -94,51 +101,58 @@ export function maakAuditService(config: { readonly db: NodePgDatabase }): {
 
   return {
     async registreer(invoer) {
-      // 1. De eigen_hash van de laatste rij — de keten is één lijn door de tijd.
-      const [laatste] = await db
-        .select({ eigenHash: auditLog.eigenHash })
-        .from(auditLog)
-        .orderBy(desc(auditLog.id))
-        .limit(1);
-      const vorigeHash = laatste?.eigenHash ?? null;
+      // De kop lezen en daarachter schrijven moet één ondeelbare handeling zijn.
+      // Zonder dat doen twee gelijktijdige schrijvers dat op dezelfde voorganger
+      // en vertakt de keten: gemeten met twintig gelijktijdige registraties
+      // kregen alle twintig `vorige_hash = NULL`. Omdat het auditlog bij elke
+      // muterende request wordt geschreven (§7.5 stap 7), is dat het normale
+      // geval. De adviesvergrendeling valt vanzelf weg bij COMMIT of ROLLBACK.
+      return db.transaction(async (tx) => {
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(${AUDIT_SLOT_SLEUTEL})`);
 
-      // 2. De hash over vorige_hash ‖ canonieke JSON van de regel.
-      const gebeurtenisOp = new Date();
-      const regel = regelInhoud(invoer, gebeurtenisOp);
-      const eigenHash = hashOver(vorigeHash, regel);
+        // 1. De eigen_hash van de laatste rij — de keten is één lijn door de tijd.
+        const [laatste] = await tx
+          .select({ eigenHash: auditLog.eigenHash })
+          .from(auditLog)
+          .orderBy(desc(auditLog.id))
+          .limit(1);
+        const vorigeHash = laatste?.eigenHash ?? null;
 
-      // 3. Insert (alleen-INSERT-recht op de rol; de rij is daarna immutable).
-      const [rij] = await db
-        .insert(auditLog)
-        .values({
-          vveId: invoer.vveId,
-          persoonId: invoer.persoonId,
-          gebeurtenis: invoer.gebeurtenis,
-          categorie: invoer.categorie,
-          onderwerpTabel: invoer.onderwerpTabel ?? null,
-          onderwerpId: invoer.onderwerpId ?? null,
-          details: invoer.details ?? null,
-          ipAdres: invoer.ipAdres ?? null,
-          gebruikerAgent: invoer.gebruikerAgent ?? null,
-          gebeurtenisOp: gebeurtenisOp,
-          vorigeHash,
-          eigenHash,
-        })
-        .returning({ id: auditLog.id });
-      if (rij === undefined) {
-        throw new Error('audit_log-insert leverde geen rij op');
-      }
-      return { id: rij.id, eigenHash };
+        // 2. De hash over vorige_hash ‖ canonieke JSON van de regel.
+        const gebeurtenisOp = new Date();
+        const regel = regelInhoud(invoer, gebeurtenisOp);
+        const eigenHash = hashOver(vorigeHash, regel);
+
+        // 3. Insert (alleen-INSERT-recht op de rol; de rij is daarna immutable).
+        const [rij] = await tx
+          .insert(auditLog)
+          .values({
+            vveId: invoer.vveId,
+            persoonId: invoer.persoonId,
+            gebeurtenis: invoer.gebeurtenis,
+            categorie: invoer.categorie,
+            onderwerpTabel: invoer.onderwerpTabel ?? null,
+            onderwerpId: invoer.onderwerpId ?? null,
+            details: invoer.details ?? null,
+            ipAdres: invoer.ipAdres ?? null,
+            gebruikerAgent: invoer.gebruikerAgent ?? null,
+            gebeurtenisOp: gebeurtenisOp,
+            vorigeHash,
+            eigenHash,
+          })
+          .returning({ id: auditLog.id });
+        if (rij === undefined) {
+          throw new Error('audit_log-insert leverde geen rij op');
+        }
+        return { id: rij.id, eigenHash };
+      });
     },
 
     async verifieerKeten() {
       // Verificatie leest de rijen in volgorde en bouwt de keten na. De
       // gebeurtenis_op wordt uit de database gelezen — de hash geldt voor de
       // opgeslagen waarde, niet voor een opnieuw-gemaakte timestamp.
-      const rijen = await db
-        .select()
-        .from(auditLog)
-        .orderBy(auditLog.id);
+      const rijen = await db.select().from(auditLog).orderBy(auditLog.id);
 
       let vorige: string | null = null;
       for (const rij of rijen) {

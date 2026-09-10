@@ -6,16 +6,15 @@ nodig verbeterd, en apart gecommit (bericht `FXX-review: ...`).
 
 ## Huidig doel
 
-**F09** — Auditlog met hashketen, interceptor, dagelijkse ketenverificatie en
-alleen-INSERT-recht. Status: **in uitvoering** (niet-gecommit `schema/audit-log.ts`).
+**F10** — pg-boss, mailwachtrij, mailsjablonen en een verzendworker met backoff. Status:
+**in uitvoering** (niet-gecommit `gemeenschappelijk/mail/mail-service.ts`).
 
-Klaar-signaal: een commit die met `F09:` begint of `F09 klaar` bevat, auditcode in
-`apps/api/src/gemeenschappelijk/audit/`, en een schone werkboom.
+Klaar-signaal: een commit die met `F10:` begint of `F10 klaar` bevat, mailcode in
+`apps/api/src/gemeenschappelijk/mail/`, en een schone werkboom.
 
-Aandacht: §6.8 en test 38. De keten moet aantoonbaar breken bij een handmatig gewijzigde of
-verwijderde regel — controleer dat de test dat werkelijk aantoont en niet alleen de
-gelukkige route volgt. Verder moet de applicatierol alleen `INSERT` hebben op `audit_log`,
-geen `UPDATE` of `DELETE`; dat is een migratie, geen afspraak.
+Aandacht: §7.7 en §13.2. Een falende SMTP mag nooit een gebruikersactie laten mislukken, de
+taken moeten idempotent zijn en onder een lock draaien, en er mag geen wachtwoord of token in
+de mailwachtrij belanden dat daar blijft staan (§8.3 bewaartermijn twee jaar).
 
 ## Werkwijze per blok
 

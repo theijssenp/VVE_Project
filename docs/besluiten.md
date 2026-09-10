@@ -1039,3 +1039,43 @@ mailinfrastructuur.
 `KetengebrokenFout`, en een DELETE van een middelste rij breekt de keten via
 het vorige_hash-hiaat. Beide aanvallen doen zich als database-eigenaar — de
 dreiging waar §6.8 over schrijft.
+
+### Herziening na review (10-09-2026) — F09 (auditlog)
+
+Dit blok is goed getest, en dat is opvallend genoeg om te noemen: de suite dekt niet alleen
+de wijziging maar óók de **verwijdering** van een regel, en de alleen-INSERT-rechten worden
+werkelijk als `vve_app` beproefd in plaats van met rechten die de test zichzelf geeft. Dat
+is precies waar F04 en F08 struikelden. Eén defect.
+
+**De keten vertakte onder gelijktijdigheid.** `registreer()` las de kop van de keten en
+schreef daar los van elkaar achteraan. Twee gelijktijdige schrijvers lezen dan dezelfde
+voorganger en krijgen hetzelfde `vorige_hash`. Gemeten met twintig gelijktijdige
+registraties tegen een verse database: **alle twintig kregen `vorige_hash = NULL`** — elke
+schrijver dacht de eerste te zijn. Er was geen keten, maar twintig losse wortels.
+
+Dat is geen randgeval: het auditlog wordt bij elke muterende request geschreven (§7.5 stap
+7), dus gelijktijdigheid is de normale toestand. Een vertakte keten maakt de dagelijkse
+verificatie waardeloos — die slaat dan constant alarm, en een alarm dat altijd afgaat wordt
+genegeerd. Daarmee is de manipulatiebestendigheid weg, terwijl het logboek er intact uitziet.
+
+Opgelost door het lezen van de kop en het schrijven van de regel in één transactie te zetten
+met `pg_advisory_xact_lock`. Nagemeten: twintig gelijktijdige registraties leveren nu één
+rechte lijn op, elke schakel wijzend naar de `eigen_hash` van zijn voorganger.
+
+De bestaande tests zagen dit niet omdat ze netjes één voor één registreren.
+
+**Kort een unieke index geprobeerd en weer teruggedraaid.** Een `UNIQUE ... NULLS NOT
+DISTINCT` op `vorige_hash` zou een vertakking ook buiten de service om onmogelijk maken.
+Maar §8.3 schrijft een bewaartermijn van drie jaar voor het auditlog voor: oude regels worden
+opgeschoond, waarna de oudste overgebleven regel naar een verwijderde voorganger wijst en een
+nieuwe NULL-start kan ontstaan. Zo'n index vecht dan met voorzien gedrag. De vergrendeling
+alleen is de juiste maatregel.
+
+**Afwijking van de spec, ter beslissing.** De kolommen heten `gebeurtenis`, `categorie`,
+`onderwerp_tabel`, `onderwerp_id`, `details`, `ip_adres`, `gebruiker_agent` en
+`gebeurtenis_op`, waar §6.8 `actie`, `entiteit`, `entiteit_id`, `oud_json`, `nieuw_json`,
+`ip`, `user_agent` en `tijdstip` noemt. De toevoeging `categorie` (app/financieel/beveiliging)
+is een verbetering: die sluit aan op de logkanalen uit §7.9. Maar `oud_json` en `nieuw_json`
+zijn samengevoegd tot één `details`-kolom, en daarmee verdwijnt de expliciete voor-en-na van
+een wijziging — juist wat een auditlog bruikbaar maakt bij een geschil. Niet gewijzigd: een
+kolomhernoeming raakt de interceptor uit dit blok en is een keuze, geen defect.
