@@ -870,3 +870,41 @@ die in productie merkbaar zouden zijn.
   handen; zonder die aanroep blijven oude hashes staan.
 
 Beide horen in F08 of een expliciet vervolgblok, niet in een review.
+
+## F07 — MFA: passkeys primair, TOTP-terugval, herstelcodes, MFA-gate (09-09-2026)
+
+**Keuze: otplib 13 met de plugin-API (NobleCryptoPlugin + ScureBase32Plugin).**
+Otplib v13 vereist expliciete crypto/base32-plugins; de require is centraal in
+totp.ts (CJS-bundel resolved onbetrouwbaar onder NodeNext met een statische
+ESM-import). TOTP-parameters: 6 cijfers, 30 s periode, ±1 stapstolerantie
+(standaard van de library).
+
+**Keuze: de TOTP-versleuteling is een gemarkeerde plaatsvervanger tot B01.**
+Spec §6.2 eist AES-256-GCM met de omgevingssleutel; die sleutelinfrastructure
+komt in B01. Tot die tijd versleutelt een HMAC-sleutelstroom-XOR (prefix
+"v0:") het secret, zodat er géén platte-tekst secrets in de database staan en
+de kolomstructuur (bytea + versieprefix) alvast klopt. B01 vervangt de
+plaatsvervanger en herversleutelt bestaande waarden.
+
+**Keuze: herstelcodes als argon2-hashes in `persoon.herstelcodes_hash`
+(text[]) zoals §6.3 al voorschrijft.** 10 codes van 4 bytes (8 hex), éénmalig
+terug aan de gebruiker, verbruikte verwijderd uit de array. Verifiëren gaat
+timing-veilig via de bestaande argon2-verificatie.
+
+**Keuze: passkey-challenges in-memory met TTL (5 min) in de service.** De
+controller (F08) kan ze ook aan de HTTP-sessie hangen; de module-structuur
+maakt beide mogelijk. WebAuthn-registratie/asserties zelf zijn end-to-end te
+testen in de PWA-flow (F11); hier zijn opties-generatie en challenge-beheer
+gecontroleerd.
+
+**Keuze: de MFA-gate als aparte bewaker op de geldstroomlijst (§7.6/§8.5).**
+De lijst volgt de §8.5-handelingen (incassobatch genereren/goedkeuren, IBAN-
+en incassant-ID-wijziging, mandaat muteren, boekjaar afsluiten, rol wijzigen).
+Een recht uit de lijst mag alleen worden toegekend aan iemand met een passkey
+óf geactiveerd TOTP; de gate is een service-functie die F08's RolGuard
+aanroept vóór het toekennen. Herauthenticatie (opnieuw MFA op de handeling)
+volgt in F08 met de sessie-context.
+
+**Draaivolgorde migraties:** 0006 voegt alleen `passkey` toe; de
+mfa-kolommen bestaan al sinds 0002. Censustest leest de map dynamisch en
+breekt niet.
