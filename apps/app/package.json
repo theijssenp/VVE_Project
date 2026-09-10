@@ -5,7 +5,7 @@
   "description": "Ionic 9 + Angular 21 client (PWA; later Capacitor). Blok F11: schil, routing, tokenopslag, HTTP-interceptor, inlog- en MFA-schermen.",
   "scripts": {
     "build": "ng build",
-    "start": "ng serve"
+    "start": "ng serve --port 4200"
   },
   "dependencies": {
     "@angular/common": "^21.2.0",

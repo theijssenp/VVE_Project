@@ -28,6 +28,7 @@ import type { ApiFout } from '../kern/fout.js';
         <ion-input
           label="Code"
           labelPlacement="stacked"
+          fill="outline"
           inputmode="numeric"
           name="code"
           autocomplete="one-time-code"

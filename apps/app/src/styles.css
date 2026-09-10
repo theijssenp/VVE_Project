@@ -1,4 +1,13 @@
-body {
-  margin: 0;
-  font-family: system-ui, sans-serif;
-}
+/* Ionic-basis (spec §9: Ionic-componenten leveren de toegankelijkheidsbasis). */
+@import '@ionic/angular/css/core.css';
+@import '@ionic/angular/css/normalize.css';
+@import '@ionic/angular/css/structure.css';
+@import '@ionic/angular/css/typography.css';
+@import '@ionic/angular/css/display.css';
+
+/* Hulpklassen die de schermen gebruiken (ion-padding e.d.). */
+@import '@ionic/angular/css/padding.css';
+@import '@ionic/angular/css/text-alignment.css';
+
+/* Donkere modus volgt de voorkeur van het apparaat. */
+@import '@ionic/angular/css/palettes/dark.system.css';

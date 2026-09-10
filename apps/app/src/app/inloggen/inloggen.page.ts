@@ -38,6 +38,7 @@ import type { ApiFout } from '../kern/fout.js';
         <ion-input
           label="E-mailadres"
           labelPlacement="stacked"
+          fill="outline"
           type="email"
           name="email"
           autocomplete="username"
@@ -46,6 +47,7 @@ import type { ApiFout } from '../kern/fout.js';
         <ion-input
           label="Wachtwoord"
           labelPlacement="stacked"
+          fill="outline"
           type="password"
           name="wachtwoord"
           autocomplete="current-password"
