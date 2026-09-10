@@ -972,3 +972,37 @@ Nest-app (APP_GUARD-providers in de bootstrap) — bewust hier niet aangezet:
 zodra HealthModule globaal guards draagt moet de health-route een recht en een
 tenant-claim hebben; dat hoort bij de eerste functionele module (V01), niet bij
 de guard-bouwstenen.
+
+### Herziening na review (10-09-2026) — F08 (guards)
+
+De guards zelf zijn goed: de `TenantGuard` leest `vveId` uitsluitend uit het gedecodeerde
+token en de verzoek-interface geeft alleen `headers`, dus een tenant uit de body kán er
+niet in — dat is de eis van §7.5 stap 2 afgedwongen door de vorm van de code en niet door
+oplettendheid. De Zod-pipe weigert onbekende velden en lekt geen stacktraces. Eén ingreep,
+maar een fundamentele.
+
+**Test #32 controleerde een handmatig register in plaats van de werkelijke routes.**
+`route-inventaris.ts` hield een lijst bij waarin modules zichzelf moesten inschrijven met
+`registreerRoute(...)`. De controle wierp alleen wanneer iemand zich inschreef mét een leeg
+recht. Wie vergeet zich in te schrijven — het geval waarvoor de controle bestaat — kwam
+simpelweg niet in de lijst voor en glipte erdoor.
+
+Dat was hier niet theoretisch: `HealthController.health()`, de enige echte route in de
+applicatie, had **geen** `@VereistRecht`-decorator. De inventaris beweerde van wel, omdat de
+regel `GET /health → health.lezen` hardgecodeerd onderaan het registerbestand stond. En
+`main.ts` riep de controle helemaal niet aan, dus er was geen opstartcontrole.
+
+Vervangen door inventarisatie uit de Nest-metadata van de controllers (`PATH_METADATA` en
+`METHOD_METADATA` via `Reflect`), met `controleerRouteDeclaraties()` als aanroep in
+`bootstrap()` vóórdat er iets luistert. `@VereistRecht('health.lezen')` staat nu op de
+health-route zelf. Handler-declaratie wint van klasse-declaratie.
+
+Drie tests: de echte routes zijn gedeclareerd (inclusief de assertie dat de inventaris
+`GET /health` daadwerkelijk vindt — anders zou een hernoemde Nest-sleutel de controle stil
+altijd laten slagen), een controller zónder decorator wordt gedetecteerd, en de
+klasse-versus-handler-voorrang klopt. Ter controle is de decorator tijdelijk weggehaald: de
+test faalt dan, zoals bedoeld.
+
+De metadatasleutels staan als letterlijke waarden in het bestand, omdat
+`@nestjs/common/constants` onder `moduleResolution: NodeNext` niet resolvet. Dat is de reden
+voor die eerste assertie.

@@ -18,6 +18,7 @@
 import { eq } from 'drizzle-orm';
 import { ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+import { Controller, Get } from '@nestjs/common';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import {
@@ -25,9 +26,11 @@ import {
   type AuthGuardsConfig,
   type InlogRequestContext,
 } from '../src/gemeenschappelijk/auth/guards.js';
+import { VereistRecht } from '../src/gemeenschappelijk/auth/vereist-recht.js';
 import {
+  controleerRouteDeclaraties,
   inventariseerRoutes,
-  registreerRoute,
+  routesZonderRecht,
 } from '../src/gemeenschappelijk/auth/route-inventaris.js';
 import { VEREIST_RECHT_SLEUTEL } from '../src/gemeenschappelijk/auth/vereist-recht.js';
 import { tekenAccessToken } from '../src/gemeenschappelijk/auth/token.js';
@@ -64,21 +67,64 @@ describe('Guards en opstarttest (F08, §7.5)', () => {
       .values({ email, achternaam: `Guard${String(volg)}` })
       .returning();
     if (!p) throw new Error('seed persoon faalde');
-    const [v] = await db.db.insert(vve).values({ naam: `GuardVvE${String(volg)}` }).returning();
+    const [v] = await db.db
+      .insert(vve)
+      .values({ naam: `GuardVvE${String(volg)}` })
+      .returning();
     if (!v) throw new Error('seed vve faalde');
     return { persoonId: p.id, vveId: v.id };
   }
 
-  it('test #32: registratie zonder recht is onmogelijk; de inventaris toont rechten', () => {
-    // De health-route is bij het laden geregistreerd mét recht:
-    const routes = inventariseerRoutes();
-    expect(routes.length).toBeGreaterThanOrEqual(1);
-    for (const route of routes) {
-      expect(route.recht, `route ${route.methode} ${route.pad}`).toMatch(/^\S+$/);
+  it('test #32: de echte routes zijn geinventariseerd en allemaal gedeclareerd', async () => {
+    const { ALLE_CONTROLLERS } = await import('../src/main.js');
+    const routes = inventariseerRoutes(ALLE_CONTROLLERS);
+
+    // Als Nest zijn metadatasleutels ooit hernoemt, vindt de inventaris niets meer
+    // en zou de controle stilzwijgend altijd slagen. Daarom eerst: hij vindt echt iets.
+    expect(routes.map((r) => `${r.methode} ${r.pad}`)).toContain('GET /health');
+    expect(routesZonderRecht(ALLE_CONTROLLERS)).toEqual([]);
+    expect(() => {
+      controleerRouteDeclaraties(ALLE_CONTROLLERS);
+    }).not.toThrow();
+  });
+
+  it('test #32: een route zonder @VereistRecht laat de applicatie niet starten', () => {
+    // Dit is waar de controle voor bestaat. Een handmatig register zou deze
+    // controller nooit zien: hij schrijft zich immers nergens in.
+    @Controller('vergeten')
+    class VergetenController {
+      @Get()
+      lijst(): string {
+        return 'geen recht gedeclareerd';
+      }
     }
-    // Een registratie zonder recht werpt (deny by default bij opstarten):
-        expect(() => { registreerRoute({ methode: 'GET', pad: '/onzin', recht: '' }); },
-    ).toThrow(/zonder recht/);
+
+    expect(routesZonderRecht([VergetenController])).toHaveLength(1);
+    expect(() => {
+      controleerRouteDeclaraties([VergetenController]);
+    }).toThrow(/zonder @VereistRecht/);
+  });
+
+  it('test #32: een klasse-declaratie telt ook, een handler-declaratie wint', () => {
+    @Controller('gedekt')
+    @VereistRecht('gedekt.lezen')
+    class GedektController {
+      @Get()
+      lijst(): string {
+        return 'via de klasse';
+      }
+
+      @Get('bijzonder')
+      @VereistRecht('gedekt.bijzonder')
+      bijzonder(): string {
+        return 'via de handler';
+      }
+    }
+
+    const routes = inventariseerRoutes([GedektController]);
+    expect(routes.find((r) => r.pad === '/gedekt')?.recht).toBe('gedekt.lezen');
+    expect(routes.find((r) => r.pad === '/gedekt/bijzonder')?.recht).toBe('gedekt.bijzonder');
+    expect(routesZonderRecht([GedektController])).toEqual([]);
   });
 
   it('AuthGuard: geen/ongeldig token → 401; geldig token → doorgelaten', async () => {
@@ -198,12 +244,14 @@ describe('Guards en opstarttest (F08, §7.5)', () => {
     const origineelGet = rolGuard.reflector.get.bind(rolGuard.reflector);
 
     rolGuard.reflector.get = (() => undefined) as typeof rolGuard.reflector.get;
-    await expect(
-      guards.rolGuard.canActivate(maakContext()),
-    ).rejects.toThrow(/zonder rechtdeclaratie/);
+    await expect(guards.rolGuard.canActivate(maakContext())).rejects.toThrow(
+      /zonder rechtdeclaratie/,
+    );
 
     rolGuard.reflector.get = ((sleutel: string) =>
-      sleutel === VEREIST_RECHT_SLEUTEL ? { recht: 'incasso.batch.goedkeuren' } : undefined) as typeof rolGuard.reflector.get;
+      sleutel === VEREIST_RECHT_SLEUTEL
+        ? { recht: 'incasso.batch.goedkeuren' }
+        : undefined) as typeof rolGuard.reflector.get;
     await expect(guards.rolGuard.canActivate(maakContext())).rejects.toThrow(/geldstroom/);
 
     rolGuard.reflector.get = origineelGet;
@@ -214,14 +262,5 @@ describe('Guards en opstarttest (F08, §7.5)', () => {
     expect(parseStrikt(schema, { naam: 'VvE De Dennen' })).toEqual({ naam: 'VvE De Dennen' });
     // Mass assignment: het extra veld wordt geweigerd.
     expect(() => parseStrikt(schema, { naam: 'X', rol: 'beheerder' })).toThrow(/Ongeldige invoer/);
-  });
-
-  it('route-inventaris: dubbele registratie met hetzelfde pad is een programmeerfout', () => {
-    // De registerfunctie accepteert alleen rechten; een tweede health-registratie
-    // met hetzelfde pad zou dubbel in de lijst komen — de opstarttest vlagt dat.
-    registreerRoute({ methode: 'GET', pad: '/test-dubbel', recht: 'test.dubbel' });
-    const routes = inventariseerRoutes();
-    const dubbel = routes.filter((r: { pad: string }) => r.pad === '/test-dubbel');
-    expect(dubbel).toHaveLength(1);
   });
 });

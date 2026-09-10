@@ -6,16 +6,16 @@ nodig verbeterd, en apart gecommit (bericht `FXX-review: ...`).
 
 ## Huidig doel
 
-**F08** — Guards: `AuthGuard`, `TenantGuard`, `RolGuard`, Zod-validatiepipe met `.strict()`,
-en de opstarttest op rechtdeclaraties. Status: **nog niet gestart**.
+**F09** — Auditlog met hashketen, interceptor, dagelijkse ketenverificatie en
+alleen-INSERT-recht. Status: **in uitvoering** (niet-gecommit `schema/audit-log.ts`).
 
-Klaar-signaal: een commit die met `F08:` begint of `F08 klaar` bevat, guards in
-`apps/api/src/gemeenschappelijk/`, en een schone werkboom.
+Klaar-signaal: een commit die met `F09:` begint of `F09 klaar` bevat, auditcode in
+`apps/api/src/gemeenschappelijk/audit/`, en een schone werkboom.
 
-Aandacht: §11 tests 27, 30 en 32. Test 32 is de belangrijkste — de applicatie moet **niet
-opstarten** als één route geen rechtdeclaratie heeft. Verder staan uit F06c nog twee punten
-open die hier thuishoren: rate limiting per IP (§7.6 vraagt 20 per IP) en het aanroepen van
-`moetHerhashen` bij inloggen (§8.1).
+Aandacht: §6.8 en test 38. De keten moet aantoonbaar breken bij een handmatig gewijzigde of
+verwijderde regel — controleer dat de test dat werkelijk aantoont en niet alleen de
+gelukkige route volgt. Verder moet de applicatierol alleen `INSERT` hebben op `audit_log`,
+geen `UPDATE` of `DELETE`; dat is een migratie, geen afspraak.
 
 ## Werkwijze per blok
 

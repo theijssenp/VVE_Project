@@ -40,7 +40,10 @@ import type { Klok } from '../system-klok.js';
 // ---------------------------------------------------------------------------
 
 export class GuardFout extends Error {
-  constructor(readonly status: 401 | 403, melding: string) {
+  constructor(
+    readonly status: 401 | 403,
+    melding: string,
+  ) {
     super(melding);
     this.name = 'GuardFout';
   }
@@ -100,7 +103,9 @@ export class AuthGuard implements CanActivate {
     }
     let gecodeerd: DecodedAccessToken;
     try {
-      gecodeerd = await verifieerAccessToken(token, this.config.klok, { geheim: this.config.jwtGeheim });
+      gecodeerd = await verifieerAccessToken(token, this.config.klok, {
+        geheim: this.config.jwtGeheim,
+      });
     } catch {
       throw alsNestFout(new GuardFout(401, 'Access-token ongeldig of verlopen'));
     }

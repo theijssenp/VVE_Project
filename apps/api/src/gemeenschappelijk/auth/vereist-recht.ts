@@ -29,9 +29,7 @@ export function VereistRecht(recht: string): MethodDecorator & ClassDecorator {
 }
 
 /** Leest de rechtdeclaraties van een handler (of klassen-niveau als fallback). */
-export function leesVereistRecht(
-  lezer: (sleutel: string) => unknown,
-): VereistRechtMetadata | null {
+export function leesVereistRecht(lezer: (sleutel: string) => unknown): VereistRechtMetadata | null {
   const waarde = lezer(VEREIST_RECHT_SLEUTEL);
   if (
     waarde !== null &&
@@ -43,4 +41,3 @@ export function leesVereistRecht(
   }
   return null;
 }
-
