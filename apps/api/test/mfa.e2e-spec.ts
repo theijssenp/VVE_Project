@@ -77,7 +77,7 @@ describe('MFA — TOTP, herstelcodes en gate (F07)', () => {
     const opgeslagen = rows[0]?.secret;
     expect(opgeslagen).not.toBeNull();
     const alsTekst = (opgeslagen as Buffer | null)?.toString('utf8') ?? '';
-    expect(alsTekst.startsWith('v0:')).toBe(true); // versleuteld met versieprefix
+    expect(alsTekst.startsWith('v1:')).toBe(true); // AES-256-GCM met versieprefix (§6.2)
     expect(alsTekst).not.toContain(secret); // de platte tekst is er niet
     expect(rows[0]?.verplicht).toBe(true);
   });
@@ -104,7 +104,8 @@ describe('MFA — TOTP, herstelcodes en gate (F07)', () => {
     const codes = await totp.genereerHerstelcodes(id);
     expect(codes).toHaveLength(10);
     for (const code of codes) {
-      expect(code).toMatch(/^[0-9a-f]{8}$/);
+      // 16 bytes = 128 bits; een herstelcode omzeilt de tweede factor volledig.
+      expect(code).toMatch(/^[0-9a-f]{32}$/);
     }
 
     // Eén code verbruiken lukt en verwijdert haar uit de array:
@@ -114,9 +115,7 @@ describe('MFA — TOTP, herstelcodes en gate (F07)', () => {
       await expect(totp.verbruikHerstelcode(id, eerste)).rejects.toThrow(OnjuisteHerstelcodeFout);
     }
     // Onbekende code faalt:
-    await expect(totp.verbruikHerstelcode(id, 'deadbeef')).rejects.toThrow(
-      OnjuisteHerstelcodeFout,
-    );
+    await expect(totp.verbruikHerstelcode(id, 'deadbeef')).rejects.toThrow(OnjuisteHerstelcodeFout);
 
     const controle = await db.pool.query<{ codes: string[] | null }>(
       'SELECT herstelcodes_hash AS codes FROM persoon WHERE id = $1',
@@ -131,7 +130,9 @@ describe('MFA — TOTP, herstelcodes en gate (F07)', () => {
     const { id } = await seed(volgnummer);
 
     // Zonder MFA: geldstroomrecht wordt geweigerd.
-    await expect(gate.vereisMfaVoor(id, 'incasso.batch.goedkeuren')).rejects.toThrow(MfaVereistFout);
+    await expect(gate.vereisMfaVoor(id, 'incasso.batch.goedkeuren')).rejects.toThrow(
+      MfaVereistFout,
+    );
     // Niet-geldstroomrechten zijn vrij:
     await expect(gate.vereisMfaVoor(id, 'document.upload')).resolves.toBeUndefined();
 
@@ -146,3 +147,31 @@ describe('MFA — TOTP, herstelcodes en gate (F07)', () => {
 function eerstelok(code: string | undefined): code is string {
   return typeof code === 'string';
 }
+
+describe('Kolomversleuteling (F07-review, §6.2)', () => {
+  it('is geauthenticeerd: een gewijzigde byte wordt geweigerd', async () => {
+    const { versleutelKolom, ontsleutelKolom } =
+      await import('../src/gemeenschappelijk/auth/totp.js');
+    const data = versleutelKolom('GEHEIMSECRET', 'iemand@example.test');
+    expect(ontsleutelKolom(data, 'iemand@example.test')).toBe('GEHEIMSECRET');
+
+    const geknoeid = Buffer.from(data);
+    const laatste = geknoeid.length - 1;
+    geknoeid[laatste] = (geknoeid[laatste] ?? 0) ^ 0xff; // laatste byte van de tag omdraaien
+    expect(() => ontsleutelKolom(geknoeid, 'iemand@example.test')).toThrow();
+  });
+
+  it('bindt de ciphertext aan de context: een andere rij kan hem niet lezen', async () => {
+    const { versleutelKolom, ontsleutelKolom } =
+      await import('../src/gemeenschappelijk/auth/totp.js');
+    const data = versleutelKolom('GEHEIMSECRET', 'eigenaar@example.test');
+    expect(() => ontsleutelKolom(data, 'iemand-anders@example.test')).toThrow();
+  });
+
+  it('gebruikt per keer een nieuwe nonce: dezelfde invoer geeft andere bytes', async () => {
+    const { versleutelKolom } = await import('../src/gemeenschappelijk/auth/totp.js');
+    const a = versleutelKolom('ZELFDE', 'iemand@example.test');
+    const b = versleutelKolom('ZELFDE', 'iemand@example.test');
+    expect(a.equals(b)).toBe(false);
+  });
+});

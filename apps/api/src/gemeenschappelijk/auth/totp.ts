@@ -3,7 +3,9 @@
  *
  * Service rond otplib 13 (plugin-API: NobleCryptoPlugin + ScureBase32Plugin).
  * Het TOTP-secret staat versleuteld op `persoon.totp_secret_versleuteld`
- * (bytea); de echte versleuteling volgt in B01 (AES-256-GCM). Tot die tijd
+ * (bytea) met AES-256-GCM en een sleutel uit de omgeving (§6.2). B01 verhuist
+ * deze functies naar een gedeelde module en gebruikt ze ook voor de IBAN-kolommen.
+ * Tot die tijd
  * is de encryptiefunctie een expliciet gemarkeerde HMAC-stream-XOR-plaats-
  * vervanger — platte-tekst secrets gaan nooit de database in, en de kolom-
  * structuur (bytea met versieprefix) klopt alvast.
@@ -13,7 +15,7 @@
  * (text[]). Verbruikte codes worden uit de array verwijderd (§6.3).
  */
 
-import { createHmac, randomBytes } from 'node:crypto';
+import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'node:crypto';
 
 import { eq } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
@@ -23,11 +25,20 @@ import { hashWachtwoord, verifieerWachtwoord } from './wachtwoord.js';
 
 /** Aantal herstelcodes bij activatie (spec: eenmalig getoond). */
 export const HERSTELCODES_AANTAL = 10;
-/** Lengte van een herstelcode: 4 bytes = 8 hex-tekens. */
-const HERSTELCODE_BYTES = 4;
-/** Versieprefix van de plaatsvervangerversleuteling (vervangen door B01). */
-const PLAATSVERVANGER_VERSIE = 'v0:';
-const PLAATSVERVANGER_SLEUTEL = 'VVE-TOTP-PLACEHOLDER-VERVANG-IN-B01';
+/**
+ * Lengte van een herstelcode: 16 bytes = 128 bits, als 32 hex-tekens.
+ *
+ * Een herstelcode omzeilt de tweede factor volledig — hij is een tweede wachtwoord,
+ * geen bevestigingscode. Met 4 bytes (32 bits) en tien geldige codes per account is de
+ * zoekruimte om er een te raden ongeveer 2^29; dat is met geautomatiseerd gokken
+ * haalbaar zodra de verbruikfunctie niet zelf begrensd is.
+ */
+const HERSTELCODE_BYTES = 16;
+
+/** Opslagformaat kolomversleuteling: `v1:` ‖ nonce(12) ‖ ciphertext ‖ tag(16). */
+const KOLOM_VERSIE = 'v1:';
+const NONCE_BYTES = 12;
+const TAG_BYTES = 16;
 
 /** Foutklassen, zodat de controller ze kan onderscheiden (F08). */
 export class TotpNietGeactiveerdFout extends Error {
@@ -93,7 +104,7 @@ export function maakTotpService(config: { readonly db: NodePgDatabase }): TotpSe
       await db
         .update(persoon)
         .set({
-          totpSecretVersleuteld: versleutelPlaatsvervanger(secret, email),
+          totpSecretVersleuteld: versleutelKolom(secret, email),
           mfaVerplicht: true,
         })
         .where(eq(persoon.id, persoonId));
@@ -110,7 +121,7 @@ export function maakTotpService(config: { readonly db: NodePgDatabase }): TotpSe
       if (versleuteld === null) {
         throw new TotpNietGeactiveerdFout();
       }
-      const secret = ontsleutelPlaatsvervanger(versleuteld, rij?.email ?? '');
+      const secret = ontsleutelKolom(versleuteld, rij?.email ?? '');
       const geldig = await verifieerTotpCode(secret, code);
       if (!geldig) {
         throw new OnGeldigeTotpCodeFout();
@@ -126,10 +137,7 @@ export function maakTotpService(config: { readonly db: NodePgDatabase }): TotpSe
       for (const code of codes) {
         hashes.push(await hashWachtwoord(code));
       }
-      await db
-        .update(persoon)
-        .set({ herstelcodesHash: hashes })
-        .where(eq(persoon.id, persoonId));
+      await db.update(persoon).set({ herstelcodesHash: hashes }).where(eq(persoon.id, persoonId));
       // De codes gaan éénmalig terug naar de beller (§7.6); hierna is alleen
       // de hash in de database bekend.
       return codes;
@@ -156,10 +164,7 @@ export function maakTotpService(config: { readonly db: NodePgDatabase }): TotpSe
         throw new OnjuisteHerstelcodeFout();
       }
       const over = hashes.filter((_, i) => i !== getroffen);
-      await db
-        .update(persoon)
-        .set({ herstelcodesHash: over })
-        .where(eq(persoon.id, persoonId));
+      await db.update(persoon).set({ herstelcodesHash: over }).where(eq(persoon.id, persoonId));
       return true;
     },
   };
@@ -203,59 +208,66 @@ export async function genereerTotpCodeVoor(secret: string): Promise<string> {
 }
 
 // ---------------------------------------------------------------------------
-// Versleutelings-placeholder (tot B01) — HMAC-sleutelstroom-XOR, gemarkeerd.
+// Kolomversleuteling (spec §6.2): AES-256-GCM met een sleutel uit de omgeving.
 // ---------------------------------------------------------------------------
 
 /**
- * Tijdelijke versleuteling vóór B01: XOR met een per-32-byte-blok hernieuwde
- * HMAC-sleutelstroom. Geen echte semantische security — het doel is alleen
- * dat er géén platte-tekst TOTP-secrets in de database staan en de kolom-
- * structuur (bytea met versieprefix "v0:") alvast klopt. Vervang in B01 door
- * AES-256-GCM met de omgevingssleutel (spec §6.2).
+ * Afgeleide 32-byte sleutel uit `KOLOM_SLEUTEL`. Eén keer berekend en bewaard:
+ * scrypt is bewust traag en hoeft niet per aanroep te draaien.
+ *
+ * Er is geen terugvalwaarde. Een sleutel in de broncode zou betekenen dat een
+ * databasedump plus de repository alle TOTP-secrets prijsgeeft — en daarmee de
+ * tweede factor van elke gebruiker, want met het secret genereer je zelf geldige
+ * codes. Ontbreekt de sleutel, dan start de dienst niet.
  */
-export function versleutelPlaatsvervanger(tekst: string, context: string): Buffer {
-  const bytes = Buffer.from(tekst, 'utf8');
-  const uit = Buffer.alloc(bytes.length);
-  const keystore = PLAATSVERVANGER_SLEUTEL + ':' + context;
-  for (let i = 0; i < bytes.length; i += 1) {
-    if (i % 32 === 0) {
-      const blok = i / 32;
-      const stroom = hmacStroom(keystore, blok);
-      for (let j = 0; j < 32 && i + j < bytes.length; j += 1) {
-        const sleutelByte = stroom[j] ?? 0;
-        uit[i + j] = (bytes[i + j] ?? 0) ^ sleutelByte;
-      }
-    }
+let sleutelCache: Buffer | null = null;
+function kolomSleutel(): Buffer {
+  const bestaand = sleutelCache;
+  if (bestaand !== null) return bestaand;
+  const ruw = process.env['KOLOM_SLEUTEL'];
+  if (ruw === undefined || ruw === '') {
+    throw new Error(
+      'KOLOM_SLEUTEL ontbreekt. Zet een willekeurige waarde van minimaal 32 tekens in de ' +
+        'omgeving (zie .env.voorbeeld); er is bewust geen standaardwaarde.',
+    );
   }
-  return Buffer.concat([Buffer.from(PLAATSVERVANGER_VERSIE, 'utf8'), uit]);
+  if (ruw.length < 32) {
+    throw new Error(`KOLOM_SLEUTEL moet minimaal 32 tekens zijn (nu ${String(ruw.length)}).`);
+  }
+  const afgeleid = scryptSync(ruw, 'vve-kolomsleutel-v1', 32);
+  sleutelCache = afgeleid;
+  return afgeleid;
 }
 
-export function ontsleutelPlaatsvervanger(data: Buffer, context: string): string {
-  const voorvoegsel = Buffer.from(PLAATSVERVANGER_VERSIE, 'utf8');
-  const payload = data.subarray(voorvoegsel.length);
-  const keystore = PLAATSVERVANGER_SLEUTEL + ':' + context;
-  const uit = Buffer.alloc(payload.length);
-  for (let i = 0; i < payload.length; i += 1) {
-    if (i % 32 === 0) {
-      const blok = i / 32;
-      const stroom = hmacStroom(keystore, blok);
-      for (let j = 0; j < 32 && i + j < payload.length; j += 1) {
-        const sleutelByte = stroom[j] ?? 0;
-        uit[i + j] = (payload[i + j] ?? 0) ^ sleutelByte;
-      }
-    }
-  }
-  return uit.toString('utf8');
+/**
+ * Versleutelt met AES-256-GCM. Opslagformaat: `v1:` ‖ nonce(12) ‖ ciphertext ‖ tag(16),
+ * conform §6.2. De `context` (hier het e-mailadres) gaat als AAD mee, zodat een
+ * ciphertext niet naar een andere rij te verplaatsen is.
+ *
+ * De nonce komt per aanroep uit de CSPRNG. Nonce-hergebruik breekt GCM volledig —
+ * niet alleen de vertrouwelijkheid maar ook de authenticatie — dus die mag nooit
+ * een vaste waarde worden.
+ */
+export function versleutelKolom(tekst: string, context: string): Buffer {
+  const nonce = randomBytes(NONCE_BYTES);
+  const cipher = createCipheriv('aes-256-gcm', kolomSleutel(), nonce);
+  cipher.setAAD(Buffer.from(context, 'utf8'));
+  const ct = Buffer.concat([cipher.update(tekst, 'utf8'), cipher.final()]);
+  return Buffer.concat([Buffer.from(KOLOM_VERSIE, 'utf8'), nonce, ct, cipher.getAuthTag()]);
 }
 
-/** 32-byte sleutelstroom voor blok `n` (deterministisch, per keystore). */
-function hmacStroom(keystore: string, n: number): Buffer {
-  const vier = Math.floor(n);
-  const teller = Uint8Array.of(
-    (vier >>> 24) & 0xff,
-    (vier >>> 16) & 0xff,
-    (vier >>> 8) & 0xff,
-    vier & 0xff,
-  );
-  return createHmac('sha256', keystore).update(teller).digest();
+/** Ontsleutelt het formaat uit {@link versleutelKolom}; werpt bij een gewijzigde tag. */
+export function ontsleutelKolom(data: Buffer, context: string): string {
+  const voorvoegsel = Buffer.from(KOLOM_VERSIE, 'utf8');
+  if (!data.subarray(0, voorvoegsel.length).equals(voorvoegsel)) {
+    throw new Error('Onbekend versleutelformaat in kolom (verwacht v1:).');
+  }
+  const romp = data.subarray(voorvoegsel.length);
+  const nonce = romp.subarray(0, NONCE_BYTES);
+  const tag = romp.subarray(romp.length - TAG_BYTES);
+  const ct = romp.subarray(NONCE_BYTES, romp.length - TAG_BYTES);
+  const decipher = createDecipheriv('aes-256-gcm', kolomSleutel(), nonce);
+  decipher.setAAD(Buffer.from(context, 'utf8'));
+  decipher.setAuthTag(tag);
+  return Buffer.concat([decipher.update(ct), decipher.final()]).toString('utf8');
 }

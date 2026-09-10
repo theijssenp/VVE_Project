@@ -6,16 +6,16 @@ nodig verbeterd, en apart gecommit (bericht `FXX-review: ...`).
 
 ## Huidig doel
 
-**F07** — MFA: passkeys (SimpleWebAuthn) als primaire methode, TOTP en herstelcodes als
-terugval, gekoppeld aan de geldstroomrechten. Status: **in uitvoering** (niet-gecommit werk
-in `schema/passkey.ts` en migratie `0006_passkey.sql`).
+**F08** — Guards: `AuthGuard`, `TenantGuard`, `RolGuard`, Zod-validatiepipe met `.strict()`,
+en de opstarttest op rechtdeclaraties. Status: **nog niet gestart**.
 
-Klaar-signaal: een commit die met `F07:` begint of `F07 klaar` bevat, WebAuthn-code in
-`apps/api/src/gemeenschappelijk/auth/`, en een schone werkboom.
+Klaar-signaal: een commit die met `F08:` begint of `F08 klaar` bevat, guards in
+`apps/api/src/gemeenschappelijk/`, en een schone werkboom.
 
-Let op: `schema/passkey.ts` compileert op dit moment niet — hij importeert `bytea` uit
-`drizzle-orm/pg-core`, terwijl F03 dat als eigen `customType` in `schema/types.ts` zette.
-Daardoor faalt `npm run build` zolang dat bestand zo blijft.
+Aandacht: §11 tests 27, 30 en 32. Test 32 is de belangrijkste — de applicatie moet **niet
+opstarten** als één route geen rechtdeclaratie heeft. Verder staan uit F06c nog twee punten
+open die hier thuishoren: rate limiting per IP (§7.6 vraagt 20 per IP) en het aanroepen van
+`moetHerhashen` bij inloggen (§8.1).
 
 ## Werkwijze per blok
 

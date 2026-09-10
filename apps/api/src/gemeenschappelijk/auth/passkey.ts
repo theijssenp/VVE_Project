@@ -126,7 +126,9 @@ export function maakPasskeyService(config: PasskeyServiceConfig): {
         throw new PasskeyVerificatieFout('registratie-challenge verlopen of onbekend');
       }
       const verificatie = await swa.verifyRegistrationResponse({
-        response: antwoord as unknown as Parameters<typeof swa.verifyRegistrationResponse>[0]['response'],
+        response: antwoord as unknown as Parameters<
+          typeof swa.verifyRegistrationResponse
+        >[0]['response'],
         expectedChallenge: verwachteChallenge,
         expectedOrigin: origin,
         expectedRPID: rpId,
@@ -206,7 +208,9 @@ export function maakPasskeyService(config: PasskeyServiceConfig): {
         throw new PasskeyVerificatieFout('authenticatie-challenge verlopen of onbekend');
       }
       const verificatie = await swa.verifyAuthenticationResponse({
-        response: antwoord as unknown as Parameters<typeof swa.verifyAuthenticationResponse>[0]['response'],
+        response: antwoord as unknown as Parameters<
+          typeof swa.verifyAuthenticationResponse
+        >[0]['response'],
         expectedChallenge: verwachteChallenge,
         expectedOrigin: origin,
         expectedRPID: rpId,

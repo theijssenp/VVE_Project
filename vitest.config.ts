@@ -18,6 +18,11 @@ export default defineConfig({
       'packages/**/*.test.ts',
     ],
     environment: 'node',
+    // Testomgeving: productie eist deze sleutels uit de omgeving en heeft bewust
+    // geen standaardwaarde. Hier staan ze zodat de suite zonder .env draait.
+    env: {
+      KOLOM_SLEUTEL: 'test-kolomsleutel-uitsluitend-voor-de-testsuite',
+    },
   },
   // NestJS gebruikt decorators en reflectie-metadata;
   // zonder deze flags wordt de DI-container / route-registering onvolledig (404).

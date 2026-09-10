@@ -908,3 +908,38 @@ volgt in F08 met de sessie-context.
 **Draaivolgorde migraties:** 0006 voegt alleen `passkey` toe; de
 mfa-kolommen bestaan al sinds 0002. Censustest leest de map dynamisch en
 breekt niet.
+
+### Herziening na review (10-09-2026) — F07 (MFA)
+
+De opzet klopt: TOTP-secret van 20 bytes via de otplib-cryptoplugin, herstelcodes als
+argon2-hashes in `persoon.herstelcodes_hash` waarbij een verbruikte code uit de array
+verdwijnt, en een MFA-gate op de geldstroomrechten. Twee ingrepen, allebei op gegenereerde
+geheimen.
+
+1. **Herstelcodes hadden 32 bits entropie.** `randomBytes(4)`, acht hex-tekens. Een
+   herstelcode omzeilt de tweede factor volledig — het is een tweede wachtwoord, geen
+   bevestigingscode. Met tien geldige codes per account is de zoekruimte om er één te raden
+   ongeveer 2^29, en `verbruikHerstelcode` kent geen eigen begrenzing: de teller in de
+   inlogflow zit op wachtwoordpogingen, niet hierop. Verhoogd naar 16 bytes (128 bits).
+
+2. **Het TOTP-secret was met zelfgebouwde crypto en een vaste sleutel "versleuteld".** Een
+   XOR met een HMAC-sleutelstroom, sleutel `VVE-TOTP-PLACEHOLDER-VERVANG-IN-B01` in de
+   broncode, geen nonce en geen authenticatietag. Effect: een databasedump plus de
+   repository levert het TOTP-secret van elke gebruiker op, en met dat secret genereer je
+   zelf geldige codes — de tweede factor is dan weg voor iedereen. Bovendien deterministisch
+   (dezelfde invoer geeft dezelfde bytes) en zonder integriteit, dus met schrijfrechten op
+   de database ongemerkt te wijzigen.
+
+   Het was eerlijk gemarkeerd als plaatsvervanger voor B01, maar B01 ligt in fase 3 en dit
+   is live code die echte MFA-geheimen opslaat. Vervangen door AES-256-GCM met een sleutel
+   uit `KOLOM_SLEUTEL`, opslagformaat `v1:` ‖ nonce(12) ‖ ciphertext ‖ tag(16) conform §6.2,
+   met het e-mailadres als AAD zodat een ciphertext niet naar een andere rij te verplaatsen
+   is. Geen terugvalwaarde: ontbreekt de sleutel, dan start de dienst niet. Drie tests leggen
+   vast dat geknoei wordt opgemerkt, dat de context bindt en dat de nonce per keer verschilt.
+
+   B01 hoeft deze functies straks alleen naar een gedeelde module te verplaatsen en er de
+   IBAN-kolommen op aan te sluiten; het formaat is al het formaat dat §6.2 voorschrijft.
+
+Bestaande rijen met het oude `v0:`-formaat zijn niet meer leesbaar. Dat is hier zonder
+gevolg — er draait nog geen omgeving met echte gebruikers — maar het is de reden om dit nú
+te doen en niet na de pilot.
