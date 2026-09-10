@@ -800,3 +800,37 @@ rotatietests met een verstelbare klok deterministisch draaien.
 **Migratie-censustest is dynamisch geworden:** de verwachte namen worden nu
 uit de migratiemap gelezen in plaats van hard-coded — een nieuwe migratie
 breekt de test niet, de checksum-test en idempotentietest blijven bewaken.
+
+## F06c — Inlogflow, rate limiting en apparatenlijst (09-09-2026)
+
+**Keuze: `mislukte_pogingen` als telling zonder venster-reset in deze laag.**
+Spec §7.6 zegt "5 pogingen per account per 15 minuten". De telling zelf is
+simpel op te hogen, maar het aflopende venster (pogingen vergeten na 15 min)
+vraagt een achtergrondtaak of query-tijd. Bewuste vereenvoudiging: de blokkade
+wordt gezet bij de vijfde opeenvolgende mislukte poging en loopt 15 minuten ná
+die poging af; de kolom `geblokkeerd_tot` is de enige staat. Een geslaagde login
+reset de teller én de blokkade. De IP-zijde (20/IP) hoort op de controller/HTTP-
+laag (F08) met de echte aanvrager-adres; hier bewust niet gesimuleerd.
+
+**Keuze: blokkade faalt vóór wachtwoordverificatie.** Is `geblokkeerd_tot` in
+de toekomst, dan wordt het wachtwoord niet eens geverifieerd — een geblokkeerd
+account kan niet gissen. `AccountGeblokkeerdFout` is een eigen foutklasse zodat
+de controller er een 429/403 van kan maken; de melding noemt bewust geen
+resterende tijd (geen account-enumeratie-assistent).
+
+**Keuze: identieke melding en foutklasse voor onbekend e-mailadres, wachtwoord-
+loos account, gedeactiveerd account en verkeerd wachtwoord.** `Onjuiste
+InloggegevensFout` met exact de tekst "E-mailadres of wachtwoord onjuist"
+(§7.6). De mislukte-pogingenteller loopt alleen op bij bekende accounts;
+op een onbekend adres is er niets te tellen en dat is bewust zo.
+
+**Keuze: de apparatenlijst toont alle sessie-rijen (historie incl.).**
+`laatstGebruiktOp !== null` markeert actief gebruik; ingetrokken sessies
+blijven zichtbaar met hun intrekkingsreden — het profiel mag zien wanneer
+een apparaat is uitgelogd en waarom (§7.6). De echte "actief"-filter is een
+controller-verantwoordelijkheid; de service levert de ruwe toestand.
+
+**Opvolgnotitie:** de oplopende vertraging (§7.6) zit niet in deze laag; bij F08
+(de guards/controllers) komt die op de HTTP-rand: 0/1/5/15/30/60 s per poging.
+De vertraging moet dan vóór het antwoord, niet vóór de verificatie — anders
+verliest de blokkade zijn functie.
