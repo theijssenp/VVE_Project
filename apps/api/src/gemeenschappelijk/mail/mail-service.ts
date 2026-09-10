@@ -18,10 +18,20 @@ import { mailWachtrij } from '../../database/schema/mail.js';
 
 /** Maximale pogingen vóór `mislukt` (§7.7 mail:verwerk). */
 export const MAX_POGINGEN = 5;
+
+/** Vervangt de berichttekst van een gevoelig bericht na geslaagde verzending. */
+export const GEWIST_MARKERING = '[inhoud gewist na verzending — bevatte een geheim]';
 /** Basisvertraging voor de exponentiële backoff: 1, 2, 4, 8, 16 minuten. */
 const BACKOFF_BASIS_MS = 60_000;
 
 export interface MailInvoer {
+  /**
+   * Bericht bevat een geheim (gegenereerd wachtwoord, instellink). De tekst
+   * wordt gewist zodra de aflevering is geslaagd: zonder dat blijft het geheim
+   * twee jaar in de wachtrij staan (§8.3) en in elke back-up. De regel zelf
+   * blijft, zodat het bewijs dát er iets is verstuurd bewaard blijft.
+   */
+  readonly gevoelig?: boolean;
   readonly vveId: bigint | null;
   readonly ontvangerEmail: string;
   readonly antwoordAdres?: string | null;
@@ -80,6 +90,7 @@ export function maakMailService(config: {
           onderwerp: bericht.onderwerp,
           tekst: bericht.tekst,
           isHtml: bericht.isHtml ?? false,
+          gevoelig: bericht.gevoelig ?? false,
           bijlagePad: bericht.bijlagePad ?? null,
           categorie: bericht.categorie ?? 'app',
           status: 'wachtend',
@@ -131,7 +142,12 @@ export function maakMailService(config: {
           });
           await db
             .update(mailWachtrij)
-            .set({ status: 'verzonden', foutmelding: null })
+            .set({
+              status: 'verzonden',
+              foutmelding: null,
+              // Geheimen verdwijnen na aflevering; de regel blijft als bewijs.
+              ...(rij.gevoelig ? { tekst: GEWIST_MARKERING } : {}),
+            })
             .where(eq(mailWachtrij.id, rij.id));
           verzonden += 1;
         } catch (fout: unknown) {

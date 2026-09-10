@@ -29,6 +29,8 @@ export const mailWachtrij = pgTable(
     onderwerp: text('onderwerp').notNull(),
     tekst: text('tekst').notNull(),
     isHtml: boolean('is_html').notNull().default(false),
+    /** Bericht bevat een geheim; tekst wordt na verzending gewist (migratie 0009). */
+    gevoelig: boolean('gevoelig').notNull().default(false),
     bijlagePad: text('bijlage_pad'),
     categorie: text('categorie').notNull().default('app'),
     status: text('status').notNull().default('wachtend'),

@@ -1110,3 +1110,28 @@ backoff-flow getest zonder een SMTP-server en zonder echte mail.
 verzending aan het bestuur (§7.9) gaat via de mailwachtrij (categorie
 'beveiliging') — die koppeling volgt bij de eerste functionele module die mail
 verstuurt (V01), zodat het sjabloon met de infrastructuur meegroeit.
+
+### Herziening na review (10-09-2026) — F10 (mailwachtrij)
+
+De worker is correct gebouwd. De claim gebruikt een compare-and-set
+(`UPDATE ... WHERE id = ? AND status = 'wachtend'` met `.returning()` en een controle op
+`undefined`), dus twee overlappende runs kunnen niet dubbel versturen — precies de
+idempotentie die §7.7 vraagt, en beter dan de adviesvergrendeling die ik elders nodig had.
+Exponentiële backoff, maximaal vijf pogingen, en een SMTP-fout bereikt de aanroeper niet.
+
+**Eén toevoeging: gevoelige berichten laten hun inhoud niet achter.** De wachtrij bewaart de
+opgemaakte berichttekst, en §8.3 geeft die twee jaar bewaartermijn. Voor gewone post is dat
+nuttig — bij een aanmaning wil je later kunnen aantonen wát er is verstuurd. Maar de knop
+"opnieuw wachtwoord versturen" (§3.3) zet een gegenereerd wachtwoord in diezelfde tekst, en
+dan staat dat wachtwoord twee jaar leesbaar in de database en in elke back-up, terwijl het na
+aflevering nergens meer voor nodig is.
+
+Toegevoegd: een `gevoelig`-vlag (migratie 0009). Staat die aan, dan wist de verzendworker de
+tekst zodra de aflevering is geslaagd; de regel zelf blijft, zodat het bewijs dát er iets is
+verstuurd bewaard blijft. Een test legt vast dat de ontvanger het geheim krijgt en dat het
+daarna niet meer in de wachtrij staat.
+
+Dit is een toevoeging en geen defect: de flow die het nodig heeft bestaat nog niet. De
+wachtwoordgenerator stond tijdens deze review ongecommit in de werkboom, dus dit was het
+moment om het veilige pad beschikbaar te maken — vóórdat het blok dat de mail samenstelt
+erop aansluit. **Het blok dat de wachtwoordmail bouwt, moet `gevoelig: true` zetten.**

@@ -35,7 +35,10 @@ describe('Mailwachtrij (F10, §7.7)', () => {
   });
 
   /** Bouwt een service met een nepverzender die een geregistreerd gedrag volgt. */
-  function metVerzender(gedrag: () => Promise<void>): { service: MailServiceInterface; verzonden: string[] } {
+  function metVerzender(gedrag: () => Promise<void>): {
+    service: MailServiceInterface;
+    verzonden: string[];
+  } {
     const verzonden: string[] = [];
     const nepverzender: MailVerzender = {
       async verzend(bericht) {
@@ -153,5 +156,43 @@ describe('Mailwachtrij (F10, §7.7)', () => {
     }
     const uitslag = await service.verwerkWachtrij();
     expect(uitslag.resterend).toBeGreaterThanOrEqual(2);
+  });
+
+  it('gevoelige berichten laten hun tekst niet achter (review F10)', async () => {
+    if (!db) throw new Error('geen test-db');
+    const verzonden: string[] = [];
+    const dienst = maakMailService({
+      db: db.db,
+      verzender: {
+        verzend: (b) => {
+          verzonden.push(b.tekst);
+          return Promise.resolve();
+        },
+      },
+    });
+
+    // Zoals de knop "opnieuw wachtwoord versturen" (§3.3) het zou doen.
+    const { id } = await dienst.zetInWachtrij({
+      vveId: null,
+      ontvangerEmail: `gevoelig-${String(Date.now())}@example.test`,
+      onderwerp: 'Uw nieuwe wachtwoord',
+      tekst: 'Uw wachtwoord is: Gh7-xK92-pLmQ',
+      gevoelig: true,
+      categorie: 'beveiliging',
+    });
+
+    await dienst.verwerkWachtrij();
+
+    // De ontvanger heeft het geheim gekregen...
+    expect(verzonden.join(' ')).toContain('Gh7-xK92-pLmQ');
+
+    // ...maar het staat niet meer in de wachtrij, die twee jaar bewaard blijft (§8.3).
+    const { rows } = await db.pool.query<{ tekst: string; status: string }>(
+      'SELECT tekst, status FROM mail_wachtrij WHERE id = $1',
+      [String(id)],
+    );
+    expect(rows[0]?.status).toBe('verzonden');
+    expect(rows[0]?.tekst).not.toContain('Gh7-xK92-pLmQ');
+    expect(rows[0]?.tekst).toContain('gewist');
   });
 });

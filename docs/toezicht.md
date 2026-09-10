@@ -6,15 +6,23 @@ nodig verbeterd, en apart gecommit (bericht `FXX-review: ...`).
 
 ## Huidig doel
 
-**F10** — pg-boss, mailwachtrij, mailsjablonen en een verzendworker met backoff. Status:
-**in uitvoering** (niet-gecommit `gemeenschappelijk/mail/mail-service.ts`).
+**F11** — Ionic-schil: routing, tokenopslag (cookie op web, Secure Storage native),
+HTTP-interceptor, foutafhandeling, inlog- en MFA-schermen. Status: **nog niet gestart**.
+(In de werkboom staat wel al ongecommit werk aan `auth/wachtwoord-generator.ts` en aan
+`eslint.config.mjs`, dat op F12 lijkt.)
 
-Klaar-signaal: een commit die met `F10:` begint of `F10 klaar` bevat, mailcode in
-`apps/api/src/gemeenschappelijk/mail/`, en een schone werkboom.
+Klaar-signaal: een commit die met `F11:` begint of `F11 klaar` bevat, clientcode in
+`apps/app/src/`, en een schone werkboom.
 
-Aandacht: §7.7 en §13.2. Een falende SMTP mag nooit een gebruikersactie laten mislukken, de
-taken moeten idempotent zijn en onder een lock draaien, en er mag geen wachtwoord of token in
-de mailwachtrij belanden dat daar blijft staan (§8.3 bewaartermijn twee jaar).
+Aandacht: §7.6 en §7.8. Tokens nooit in `localStorage`; op web een httpOnly-cookie voor de
+refresh, in de app Secure Storage. En de `client`-claim moet server-side worden afgedwongen
+(test 36), niet door de client zelf.
+
+**Openstaand uit eerdere blokken, hoort in het blok dat het raakt:**
+
+- rate limiting per IP (§7.6 vraagt ook 20 per IP) — F06c-review;
+- `moetHerhashen` aanroepen bij inloggen (§8.1) — F06a/F06c-review;
+- de wachtwoordmail moet `gevoelig: true` zetten (§8.3) — F10-review.
 
 ## Werkwijze per blok
 
