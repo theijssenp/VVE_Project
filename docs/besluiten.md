@@ -1079,3 +1079,34 @@ is een verbetering: die sluit aan op de logkanalen uit §7.9. Maar `oud_json` en
 zijn samengevoegd tot één `details`-kolom, en daarmee verdwijnt de expliciete voor-en-na van
 een wijziging — juist wat een auditlog bruikbaar maakt bij een geschil. Niet gewijzigd: een
 kolomhernoeming raakt de interceptor uit dit blok en is een keuze, geen defect.
+
+## F10 — pg-boss, mailwachtrij, verzendworker (09-09-2026)
+
+**Keuze: pg-boss 12 voor de terugkerende taken, met de taakinhoud als dunne
+functies.** De scheduler (schedule) en de worker (work/send) zijn gescheiden:
+de taakinhoud — mailverwerking en auditverificatie — is een gewone functie
+die de services aanroept. Tests draaien de inhoud deterministisch zonder
+scheduler; pg-boss plant in productie (mail:verwerk elke minuut,
+audit:verifieer_keten dagelijks om 06:00 Europe/Amsterdam).
+
+**Keuze: de mail zelf in een eigen tabel (`mail_wachtrij`), níét in pg-boss.**
+pg-boss beheert zijn eigen schema en zijn levensduurbeleid; de mail (inhoud,
+ontvanger, status, bewijslast §13.5) hoort in de applicatieadministratie —
+de tabel is querybaar en exporteerbaar, pg-boss-state niet.
+
+**Keuze: de statusflow wachtend → bezig → verzonden | mislukt met een
+optimistische claim.** De worker claimt per rij met een UPDATE ... WHERE
+status = 'wachtend' (returning); een overlappende run ziet de rij niet meer en
+slaat hem over — idempotent zonder een aparte lock-tabel. Fout → exponentiële
+backoff (aflever_vóór +2^n minuten) met max 5 pogingen vóór 'mislukt'
+(§7.7); de foutmelding blijft in de rij (§13.2).
+
+**Keuze: de verzender als injecteerbare interface.** Nodemailer zit in de
+productiecompositie; de tests injecteren een nepverzender. Daarmee is de
+backoff-flow getest zonder een SMTP-server en zonder echte mail.
+
+**Keuze: de audit-hoofdhash-publicatie zit in de taakregisseur.**
+`auditVerificatieTaak` roept `verifieerKeten` (F09) aan; de dagelijkse
+verzending aan het bestuur (§7.9) gaat via de mailwachtrij (categorie
+'beveiliging') — die koppeling volgt bij de eerste functionele module die mail
+verstuurt (V01), zodat het sjabloon met de infrastructuur meegroeit.
