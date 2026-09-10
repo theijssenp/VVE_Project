@@ -1135,3 +1135,36 @@ Dit is een toevoeging en geen defect: de flow die het nodig heeft bestaat nog ni
 wachtwoordgenerator stond tijdens deze review ongecommit in de werkboom, dus dit was het
 moment om het veilige pad beschikbaar te maken — vóórdat het blok dat de mail samenstelt
 erop aansluit. **Het blok dat de wachtwoordmail bouwt, moet `gevoelig: true` zetten.**
+
+## F12 — Beveiligingswachters (09-09-2026)
+
+**Keuze: statistische proof op de wachtwoordgenerator over 1 mln trekkingen.**
+De generator (`wachtwoord-generator.ts`) gebruikt node:crypto-randomBytes met
+rejection sampling — de byte-waarden die eerlijk over het alfabet verdeelbaar
+zijn blijven over, de rest gaat weg. Daarmee is er per trekking exact-equal
+kans per symbool: geen modulo-bias. De tests bewijzen lengte, alfabetdekking
+(56 symbolen), χ²-uniformiteit (df 55, α=0.001, χ² < 91), 100k wachtwoorden
+zonder duplicaten en een max/min-frequentieverhouding < 1.05.
+
+**Keuze: de beveiligingswachters als één plugin met twee rule-blokken.**
+ESLint flat config staat geen herdefinitie van een plugin over config-blokken
+toe (`Cannot redefine plugin "vve"`); de regels delen één plugin-instantie en
+de ignores die per regel verschillen (F05: de geldlaag `packages/domein/
+financieel`; F12: `*.spec.ts`/`*.test.ts`) zitten op de twee blokken die de
+plugin hergebruiken.
+
+**De vier wachters:**
+1. `Math.random` buiten testbestanden verboden — node:crypto (CSPRNG) of een
+   geïnjecteerde bron; Math.random is niet cryptografisch.
+2. `===`/`!==` op identifiers met token/hash in de naam verboden, behalve
+   vergelijkingen met een literal (null/undefined-checks zijn bereikvragen,
+   geen geheimvergelijking); geheimvergelijking loopt via timingSafeEqual.
+3. `createCipheriv` met een letterlijke IV verboden — een vaste IV maakt de
+   versleuteling deterministisch; de IV moet per bericht nieuw en willekeurig.
+4. Identifiers die met secret/wachtwoord/sleutel gaan door console/log/
+   audit-functies verboden (§8.2: geen geheimen in logs).
+
+**De wachters zijn bewust op F12-niveau en niet op domein-niveau:** de
+testbestanden zijn uitgezonderd (een nepklok mag Math.random-nabootsing
+gebruiken; de statistische test telt honderdduizenden trekkingen), en de
+geldlaag houdt zijn bewuste centenrekenkunde.

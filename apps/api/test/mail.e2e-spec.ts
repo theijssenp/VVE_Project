@@ -53,9 +53,7 @@ describe('Mailwachtrij (F10, §7.7)', () => {
   it('zetInWachtrij zet status wachtend; verwerkWachtrij verzendt en rondt af', async () => {
     if (!db) throw new Error('geen test-db');
     volg += 1;
-    const { service, verzonden } = metVerzender(async () => {
-      // nepverzender: lukt
-    });
+    const { service, verzonden } = metVerzender(() => Promise.resolve());
     const { id } = await service.zetInWachtrij({
       vveId: null,
       ontvangerEmail: `mail${String(volg)}@test.vve`,
@@ -78,9 +76,9 @@ describe('Mailwachtrij (F10, §7.7)', () => {
     if (!db) throw new Error('geen test-db');
     volg += 1;
     let poging = 0;
-    const { service } = metVerzender(async () => {
+    const { service } = metVerzender(() => {
       poging += 1;
-      throw new Error(`SMTP-luizenmuis poging ${String(poging)}`);
+      return Promise.reject(new Error(`SMTP-luizenmuis poging ${String(poging)}`));
     });
     const { id } = await service.zetInWachtrij({
       vveId: null,
@@ -122,9 +120,7 @@ describe('Mailwachtrij (F10, §7.7)', () => {
   it('aflever_vóór in de toekomst: niet verzonden tot het venster verstrekt', async () => {
     if (!db) throw new Error('geen test-db');
     volg += 1;
-    const { service, verzonden } = metVerzender(async () => {
-      // lukt
-    });
+    const { service, verzonden } = metVerzender(() => Promise.resolve());
     const toekomst = new Date(Date.now() + 60 * 60 * 1000);
     await service.zetInWachtrij({
       vveId: null,
@@ -141,9 +137,7 @@ describe('Mailwachtrij (F10, §7.7)', () => {
   it('resterend telt de wachtende berichten die nog niet verwerkt zijn', async () => {
     if (!db) throw new Error('geen test-db');
     volg += 1;
-    const { service } = metVerzender(async () => {
-      // lukt
-    });
+    const { service } = metVerzender(() => Promise.resolve());
     // Twee berichten met een toekomstige aflevertijd — niet verwerkt, wel wachtend:
     for (const n of [1, 2]) {
       await service.zetInWachtrij({
