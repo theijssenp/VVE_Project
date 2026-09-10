@@ -1006,3 +1006,36 @@ test faalt dan, zoals bedoeld.
 De metadatasleutels staan als letterlijke waarden in het bestand, omdat
 `@nestjs/common/constants` onder `moduleResolution: NodeNext` niet resolvet. Dat is de reden
 voor die eerste assertie.
+
+## F09 — Auditlog met hashketen (09-09-2026)
+
+**Keuze: de keten over álle rijen, niet per VvE.** De kolom `vve_id` is
+informatief (doorklik, filtering); de keten loopt door de tijd als één lijn —
+`vorige_hash` verwijst naar de vorige rij op `id` (identity is stijgend). Een
+globale keten is strenger dan per-VvE-ketens: een verwijdering breekt hem
+altijd, ongeacht in welke VvE de betreffende rij stond.
+
+**Keuze: canonieke JSON met sleutel-gesorteerde volgorde en ISO-8601-timestamps.**
+De hash is deterministisch: dezelfde rij-inhoud levert dezelfde hash op,
+ongeacht de kolomvolgorde in de database of de invoerorde van de structuur.
+De timestamp in de hash is de **opgeslagen** waarde (`gebeurtenis_op` uit de
+rij), niet een opnieuw-genereerde — de verificatie rekent met de
+database-toestand.
+
+**Keuze: de applicatierol verliest UPDATE/DELETE/TRUNCATE expliciet in 0007**
+(REVOKE na de brede default-privileges van 0004) en krijgt alleen INSERT
+(§6.8). Ook `vve_platform` kan het log niet muteren. Het teruglezen voor
+verificatie gebeurt via de migratierol — de dagelijkse taak draait buiten de
+requestverwerking (§7.9).
+
+**Keuze: het dagelijkse hoofdhash-publiceren is bewust níet in dit blok.** De
+verificatie (`verifieerKeten`) levert de hoofdhash; de verzending naar buiten
+(e-mail aan het bestuur, §7.9) is de taak `audit:verifieer_keten` in F10
+(pg-boss + mailwachtrij) — daar hoort de externe publicatie thuis, met de
+mailinfrastructuur.
+
+**Test #38 is op twee manieren bewezen:** een handmatige UPDATE van een rij
+(details vervalst) wordt door `verifieerKeten` gedetecteerd met de rij-id in
+`KetengebrokenFout`, en een DELETE van een middelste rij breekt de keten via
+het vorige_hash-hiaat. Beide aanvallen doen zich als database-eigenaar — de
+dreiging waar §6.8 over schrijft.
