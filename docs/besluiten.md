@@ -768,3 +768,35 @@ geïnjecteerde klok), `clockTolerance` op nul. Twee ingrepen.
 Dit is geen kwaadaardige achterdeur maar een gemakskeuze; het effect is niettemin een
 universele vervalsingssleutel in de broncode. Precies de categorie waar blok F12 op moet
 gaan letten.
+
+## F06b — Token-uitgifte en apparaat-sessies (09-09-2026)
+
+**Keuze: HS256 met een symmetrisch omgevingsgeheim (`JWT_SECRET`).** Voor een
+first-party-app met één API is een asymmetrische sleutel niet nodig: er is geen
+derde partij die tokens verifieert. HS256 houdt de eis "JWT met omgevingsgeheim"
+(§7.6) eenvoudig en het geheim staat buiten de repo. Opgevolgd door F12:
+een dev-default geheim in de bron is gemak, maar een vervalsingssleutel — daar
+waarschuwt de wachtter voor.
+
+**Keuze: opake refresh-tokens (32 bytes CSPRNG), alleen sha256-hex in de
+database (`char(64) UNIQUE`).** Het ruwe token verlaat de database nooit; een
+databasedump levert bruikbare refresh-tokens op. Rotatie per inwisseling:
+de oude hash schuift door naar `vorige_token_hash`, de nieuwe rij (of kolom-
+waarde) wordt actief. Hergebruik van een reeds geconsumeerd token trekt de
+héle `familie_id` in (§7.6, test #35): de actieve rijen van die familie worden
+met reden `hergebruik_gesignaleerd` ingetrokken en latere aanbiedingen weigeren
+opnieuw met `HergebruikGesignaleerdFout`.
+
+**Keuze: `apparaat_sessie` en `rol_toewijzing` zonder vve_id-RLS.** De sessie-
+tabel is persoon-gebonden (§6.3); RLS op `vve_id` past niet en de API-scoping
+(§7.5) beschermt de rijen. De default-privileges van migratie 0004 geven
+`vve_app` de rechten; de migratie voegt zelf geen extra grants toe.
+
+**Keuze: `SystemKlok` in `gemeenschappelijk/` die het domein-interface `Klok`
+invult.** De infrastructuurlaag mag `Date` gebruiken (de domein-ban geldt op
+`packages/domein`); de token-service injecteert de klok, zodat de verloop- en
+rotatietests met een verstelbare klok deterministisch draaien.
+
+**Migratie-censustest is dynamisch geworden:** de verwachte namen worden nu
+uit de migratiemap gelezen in plaats van hard-coded — een nieuwe migratie
+breekt de test niet, de checksum-test en idempotentietest blijven bewaken.
