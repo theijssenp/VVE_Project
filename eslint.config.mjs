@@ -110,6 +110,7 @@ const basisConfig = tseslint.config(
     ignores: [
       'node_modules/**',
       '**/dist/**',
+      '**/.angular/**', // Vite-cache van de Angular dev-server
       '**/coverage/**',
       '.github/**',
       'docs/**',
