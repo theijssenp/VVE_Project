@@ -46,6 +46,10 @@ jobs:
       - name: Build
         run: npm run build
 
+      # F11: de Ionic-client heeft een eigen bouwpijplijn (Angular), los van tsc -b.
+      - name: Build client (Ionic)
+        run: npm run build:app
+
       # F02: de compose-file syntactisch valideren met het voorbeeld-env-bestand.
       # Vangt kapotte interpolatie of ontbrekende verplichte variabelen (`:?`) af.
       - name: Compose-file valideren

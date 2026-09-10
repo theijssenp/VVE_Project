@@ -87,11 +87,11 @@ describe('Wachtwoordgenerator (F12, statistisch)', () => {
       }
     }
     const waarden = [...tellers.values()];
-        const verhouding = Math.max(...waarden) / Math.min(...waarden);
+    const verhouding = Math.max(...waarden) / Math.min(...waarden);
     // Bij 8M trekkingen over 56 symbolen is de normale spreiding ±0.5%;
     // een modulo-bias zou een factor-2-achtige kloof tonen. Grens: 5%.
     expect(verhouding).toBeLessThan(1.05);
-      });
+  });
 
   it('herstelcode-waarde: 8 hex-tekens', () => {
     const code = genereerHerstelcodeWaarde();

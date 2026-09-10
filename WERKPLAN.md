@@ -47,7 +47,7 @@ Zonder deze blokken kan er niets anders gebouwd worden. F03 t/m F09 zijn de drag
 | F08 | `AuthGuard`, `TenantGuard`, `RolGuard`, Zod-validatiepipe met `.strict()`, opstarttest op rechtdeclaraties | M | F06 | §7.5 · tests 30, 32 | **klaar** |
 | F09 | Auditlog met hashketen, interceptor, dagelijkse ketenverificatie, alleen-INSERT-recht | M | F08 | §6.8 · test 38 | **klaar** |
 | F10 | pg-boss, mailwachtrij, mailsjablonen, verzendworker met backoff | M | F03 | §7.7, M13 | **klaar** |
-| F11 | Ionic-schil: routing, tokenopslag (cookie op web, Secure Storage native), HTTP-interceptor, foutafhandeling, inlog- en MFA-schermen | L | F07 | §7.8 | todo |
+| F11 | Ionic-schil: routing, tokenopslag (cookie op web, Secure Storage native), HTTP-interceptor, foutafhandeling, inlog- en MFA-schermen | L | F07 | §7.8 | klaar |
 | F12 | Beveiligingswachters tegen zwakke geheimen: ESLint-regels (`Math.random` verboden buiten tests, `===` op token-/hashvelden, niet-variabele IV bij `createCipheriv`, geen secret in log- of auditpaden) plus een statistische test op de wachtwoordgenerator (lengte, alfabetdekking, uniformiteit over 1 mln trekkingen, geen duplicaten, geen modulo-bias) | M | F07 | §7.6, §8.5 | **klaar** |
 
 ## 3. Fase 1 — VvE, eenheden, gebruikers, documenten
@@ -180,7 +180,7 @@ AES-GCM.
 | | Aantal |
 |---|---|
 | Blokken totaal | 71 |
-| Klaar | 12 |
+| Klaar | 13 |
 | Bezig | 0 |
 
 Statuswaarden: `todo` · `bezig` · `klaar` · `overgeslagen`.

@@ -13,3 +13,6 @@ storage/
 
 # Orchestratie-lagen (opdrachten, logboeken) — bewust buiten de repo
 .orchestratie/
+
+# Angular-bouwcache
+.angular/

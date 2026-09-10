@@ -1154,6 +1154,7 @@ financieel`; F12: `*.spec.ts`/`*.test.ts`) zitten op de twee blokken die de
 plugin hergebruiken.
 
 **De vier wachters:**
+
 1. `Math.random` buiten testbestanden verboden — node:crypto (CSPRNG) of een
    geïnjecteerde bron; Math.random is niet cryptografisch.
 2. `===`/`!==` op identifiers met token/hash in de naam verboden, behalve
@@ -1168,3 +1169,70 @@ plugin hergebruiken.
 testbestanden zijn uitgezonderd (een nepklok mag Math.random-nabootsing
 gebruiken; de statistische test telt honderdduizenden trekkingen), en de
 geldlaag houdt zijn bewuste centenrekenkunde.
+
+## F11 — Ionic-schil (10-09-2026)
+
+De clientschil: routing, tokenopslag, HTTP-interceptor, foutafhandeling en de inlog- en
+MFA-schermen. PWA eerst (§7.8); de Capacitor-build is blok N01.
+
+### Keuze: Angular 21, niet 22
+
+Angular 22 eist TypeScript `>=6.0 <6.1`, en de monorepo draait op 5.9.3 — met NestJS,
+Drizzle en de bestaande strict-instellingen eraan vast. Angular 21 vraagt `>=5.9 <6.0` en
+past dus precies. Ionic 9 accepteert Angular vanaf 18, dus die combinatie is vrij.
+Doorstappen naar Angular 22 is een aparte beslissing die begint bij TypeScript over alle
+workspaces, niet iets om in de schil mee te nemen.
+
+### Twee installatiehobbels, en wat eronder zat
+
+`npm install` liep vast op `Cannot read properties of null (reading 'edgesOut')` — een bug in
+npm's arborist die afging op het peer-net van `@angular/build`. Dat pakket noemt `vitest ^4`
+als peer terwijl de repo op 3.2.7 zit, maar die peer is **optioneel**: npm hoefde hem niet op
+te lossen en crashte er toch op. Geïnstalleerd met `--legacy-peer-deps`; nagemeten dat vitest,
+TypeScript en NestJS ongewijzigd bleven. `npm ci` in de CI leest de lockfile en doet geen
+peer-resolutie, dus daar verandert niets.
+
+Daarna faalde `npm audit --audit-level=high` op vier bevindingen. Die kwamen **niet** van
+Angular: `multer` stond al op 2.2.0 vóór deze wijziging en er is sindsdien een advisory voor
+gepubliceerd (denial-of-service via een geprepareerde multipart-body). Dat had de CI hoe dan
+ook rood gezet. Opgelost met een override naar `multer ^2.3.0`.
+
+### Waar de tokens staan (§7.6)
+
+Het access-token leeft **alleen in het geheugen**, in een klasse met een privéveld. Het wordt
+nergens bewaard: vijftien minuten geldig, en na een herlaadactie haalt de client een nieuw
+exemplaar op.
+
+Voor het refresh-token verschilt het pad per platform, en dat verschil is de reden dat
+`TokenOpslag` een interface is. Op web staat het in een httpOnly-cookie die de server zet: de
+client ziet hem nooit en kan hem dus ook niet lekken via een XSS-fout. De webimplementatie
+bewaart daarom niets en geeft `null` terug — verversen gebeurt door het endpoint aan te roepen
+met `withCredentials`. Op native bestaan geen httpOnly-cookies, dus komt het opake token in
+Keychain of Keystore; die klasse **werpt** nu nog, in plaats van stilletjes op `localStorage`
+terug te vallen. Er is een test die vastlegt dat `localStorage` en `sessionStorage` niet
+worden aangeraakt.
+
+### Eén verversing tegelijk
+
+Bij het herladen van een scherm lopen meerdere verzoeken tegelijk. Krijgen die allemaal een
+401 en gaan ze allemaal zelfstandig verversen, dan wisselt elk van hen het refresh-token in —
+en het tweede gebruik van een al ingewisseld token is precies wat de server als **diefstal**
+aanmerkt (§7.6, F06b): die trekt dan de hele tokenfamilie in en logt de gebruiker overal uit.
+Een normale herlaadactie zou de gebruiker dus uitloggen.
+
+`EnkeleVerversing` zorgt dat er hoogstens één verversing loopt; de rest wacht op dezelfde
+belofte. Losstaand van Angular gehouden en getest met acht gelijktijdige aanroepen: één
+inwisseling. De interceptor herhaalt daarna hoogstens één keer — een tweede 401 met een verse
+token is een rechtenprobleem, en dat los je niet op door harder te proberen. De auth-endpoints
+zelf zijn uitgesloten: verversen op `/auth/verversen` is een oneindige lus.
+
+### Overig
+
+Foutafhandeling vertaalt naar één vorm `{ code, melding, referentie, status }` en verzint
+nooit detail dat de server niet gaf; bij een 500 met een HTML-foutpagina toont de client een
+korte tekst en niet de inhoud. De beheerschil is een aparte route, en de handelingen die daar
+komen worden server-side geweigerd op een token met `client: 'native'` (§7.8, test 36) — de
+client dwingt dat niet zelf af.
+
+De ESLint-uitzondering op `no-extraneous-class` geldt nu ook voor `apps/app`: Angular-
+componenten hebben net als NestJS-modules een lege body met alleen decorators.

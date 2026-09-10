@@ -2,11 +2,28 @@
   "name": "@vve/app",
   "version": "0.0.0",
   "private": true,
-  "description": "Ionic 8 + Angular client (PWA, later Capacitor). Blok F11 scaffoldt dit; alleen een geldige workspace-map is in F01 vereist (spec §7.2 / F01-item 2).",
+  "description": "Ionic 9 + Angular 21 client (PWA; later Capacitor). Blok F11: schil, routing, tokenopslag, HTTP-interceptor, inlog- en MFA-schermen.",
   "scripts": {
-    "build": "echo \"apps/app: nog niet gescaffoldt (F11); geen build in F01.\""
+    "build": "ng build",
+    "start": "ng serve"
   },
   "dependencies": {
-    "@vve/contract": "*"
+    "@angular/common": "^21.2.0",
+    "@angular/compiler": "^21.2.0",
+    "@angular/core": "^21.2.0",
+    "@angular/forms": "^21.2.0",
+    "@angular/platform-browser": "^21.2.0",
+    "@angular/router": "^21.2.0",
+    "@ionic/angular": "^9.0.0",
+    "@vve/contract": "*",
+    "rxjs": "^7.8.1",
+    "tslib": "^2.8.0",
+    "zone.js": "^0.15.0"
+  },
+  "devDependencies": {
+    "@angular/build": "^21.2.0",
+    "@angular/cli": "^21.2.0",
+    "@angular/compiler-cli": "^21.2.0",
+    "typescript": "^5.9.0"
   }
 }

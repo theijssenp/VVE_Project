@@ -127,7 +127,8 @@ const basisConfig = tseslint.config(
   {
     // NestJS @Module/@Injectable-klasse zijn via decorators gevuld;
     // no-extraneous-class kan dit niet detecteren en is hier een false positive.
-    files: ['apps/api/**/*.ts'],
+    // Angular-componenten hebben net zo goed een lege body met alleen decorators.
+    files: ['apps/api/**/*.ts', 'apps/app/**/*.ts'],
     rules: {
       '@typescript-eslint/no-extraneous-class': 'off',
     },
@@ -243,13 +244,20 @@ const specBestand = (bestand) => /\.spec\.ts$|\.test\.ts$/.test(bestand);
 const beveiligingsRegel = {
   meta: {
     type: 'problem',
-    docs: { description: 'Beveiligingswachters: Math.random, timing-ongelijke hashvergelijking, vaste IV, secrets in logs (F12).' },
+    docs: {
+      description:
+        'Beveiligingswachters: Math.random, timing-ongelijke hashvergelijking, vaste IV, secrets in logs (F12).',
+    },
     schema: [],
     messages: {
-      mathRandom: 'Math.random is niet cryptografisch; gebruik node:crypto (randomBytes/getRandomValues) — testbestanden uitgezonderd.',
-      timingVergelijking: 'Vergelijk tokens/hashes niet met ===: dat is niet constant-tijd. Gebruik crypto.timingSafeEqual of een domeinfunctie.',
-      vasteIv: 'De IV bij createCipheriv moet per versleuteling nieuw en willekeurig zijn; een letterlijke of constante IV maakt de versleuteling deterministisch en onveilig.',
-      secretInLog: 'Geen secret/wachtwoord/sleutel door een log- of auditpad: dit lekt geheimen naar de logs (spec §8.2).',
+      mathRandom:
+        'Math.random is niet cryptografisch; gebruik node:crypto (randomBytes/getRandomValues) — testbestanden uitgezonderd.',
+      timingVergelijking:
+        'Vergelijk tokens/hashes niet met ===: dat is niet constant-tijd. Gebruik crypto.timingSafeEqual of een domeinfunctie.',
+      vasteIv:
+        'De IV bij createCipheriv moet per versleuteling nieuw en willekeurig zijn; een letterlijke of constante IV maakt de versleuteling deterministisch en onveilig.',
+      secretInLog:
+        'Geen secret/wachtwoord/sleutel door een log- of auditpad: dit lekt geheimen naar de logs (spec §8.2).',
     },
   },
   create(context) {
@@ -276,7 +284,10 @@ const beveiligingsRegel = {
           node.arguments.length >= 3
         ) {
           const iv = node.arguments[2];
-          if (iv.type === 'Literal' || (iv.type === 'TemplateLiteral' && iv.expressions.length === 0)) {
+          if (
+            iv.type === 'Literal' ||
+            (iv.type === 'TemplateLiteral' && iv.expressions.length === 0)
+          ) {
             context.report({ node, messageId: 'vasteIv' });
           }
         }
@@ -300,10 +311,7 @@ const beveiligingsRegel = {
         // 2. === op token/hash-velden (niet in tests). False positives
         // uitsluiten: vergelijkingen met null/undefined zijn bereik-checks
         // (bestaat de waarde?), geen geheimvergelijking.
-        if (
-          ['===', '!=='].includes(node.operator) &&
-          !specBestand(bestand)
-        ) {
+        if (['===', '!=='].includes(node.operator) && !specBestand(bestand)) {
           for (const kant of [node.left, node.right]) {
             const naam = kant.type === 'Identifier' ? kant.name : null;
             if (naam && /(token|hash)/i.test(naam)) {
@@ -326,10 +334,7 @@ const beveiligingsRegel = {
 };
 
 function isNietVariabel(node) {
-  return !(
-    node.type === 'Identifier' &&
-    /(iv|nonce|salt|willekeurig|willekeur)/i.test(node.name)
-  );
+  return !(node.type === 'Identifier' && /(iv|nonce|salt|willekeurig|willekeur)/i.test(node.name));
 }
 
 // Beide eigen regels hangen aan één plugin-instantie: ESLint staat geen
@@ -340,7 +345,7 @@ function isNietVariabel(node) {
 const vvePlugin = {
   rules: {
     'cent-rekenkunde': centRekenVerbod,
-    'beveiligingswachters': beveiligingsRegel,
+    beveiligingswachters: beveiligingsRegel,
   },
 };
 
