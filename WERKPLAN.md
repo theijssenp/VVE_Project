@@ -43,7 +43,7 @@ Zonder deze blokken kan er niets anders gebouwd worden. F03 t/m F09 zijn de drag
 | F04 | RLS: rollen `vve_migratie`/`vve_app`/`vve_platform`, policies, `SET LOCAL`-transactiehelper | M | F03 | §6.9 · test 33 | **klaar** |
 | F05 | Domeinpakket financieel: `Bedrag`, `Verdeler` (grootste-restmethode), `Klok`; ESLint-regels tegen ruwe centenrekenkunde en `new Date()` | M | F01 | §5.2, §7.3 · tests 1–4 | **klaar** |
 | F06 | Auth: argon2id, inloggen, JWT-access, refresh met rotatie en hergebruikdetectie, `apparaat_sessie`, apparatenlijst | L | F04 | §7.6 · test 35 | **klaar** |
-| F07 | MFA: passkeys (SimpleWebAuthn) als primaire methode, TOTP en herstelcodes als terugval, koppeling aan geldstroomrechten | M | F06 | §7.6, §8.5 | todo |
+| F07 | MFA: passkeys (SimpleWebAuthn) als primaire methode, TOTP en herstelcodes als terugval, koppeling aan geldstroomrechten | M | F06 | §7.6, §8.5 | **klaar** |
 | F08 | `AuthGuard`, `TenantGuard`, `RolGuard`, Zod-validatiepipe met `.strict()`, opstarttest op rechtdeclaraties | M | F06 | §7.5 · tests 30, 32 | todo |
 | F09 | Auditlog met hashketen, interceptor, dagelijkse ketenverificatie, alleen-INSERT-recht | M | F08 | §6.8 · test 38 | todo |
 | F10 | pg-boss, mailwachtrij, mailsjablonen, verzendworker met backoff | M | F03 | §7.7, M13 | todo |
@@ -180,7 +180,7 @@ AES-GCM.
 | | Aantal |
 |---|---|
 | Blokken totaal | 71 |
-| Klaar | 6 |
+| Klaar | 7 |
 | Bezig | 0 |
 
 Statuswaarden: `todo` · `bezig` · `klaar` · `overgeslagen`.
