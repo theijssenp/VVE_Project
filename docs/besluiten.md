@@ -943,3 +943,32 @@ geheimen.
 Bestaande rijen met het oude `v0:`-formaat zijn niet meer leesbaar. Dat is hier zonder
 gevolg — er draait nog geen omgeving met echte gebruikers — maar het is de reden om dit nú
 te doen en niet na de pilot.
+
+## F08 — Guards, rechtdeclaraties en Zod-validatie (09-09-2026)
+
+**Keuze: de opstarttest als expliciet route-register (test #32).** In plaats
+van de interne Nest-router-stack te introspecteren (kwetsbare privé-structuur)
+registreert elke module zijn routes in `route-inventaris.ts`; de
+registerfunctie weigert een registratie zonder recht, zodat een route zonder
+`@VereistRecht` onmogelijk in de lijst komt. `inventariseerRoutes()` is de
+opstarttest-bron: de test controleert dat élke geregistreerde route een recht
+draagt. De runtime-achtervang (RolGuard weigert zonder metadata) blijft
+bestaan — twee lagen op dezelfde regel.
+
+**Keuze: `vve_id`- en `mfa`-claims in het access-token.** De TenantGuard leest
+de tenant uitsluitend uit het token (§7.5 stap 2: de client kiest niets); het
+token draagt de VvE-keuze van de inlog. De `mfa`-claim markeert een
+herauthenticatie (§7.6) — de RolGuard eist hem vóór geldstroomrechten (F07-gate).
+De claims worden typeveilig geparseerd (string→bigint met regex-veto).
+
+**Keuze: ZodValidationPipe met `.strict()` en beperkte foutdetails.** De pipe
+gooit één `BadRequestException` met alleen het foutpad ("Ongeldige invoer op
+naam") — geen stack, geen volledige issue-lijst naar de client (§8.2). De
+schema's zelf volgen straks per module in `packages/contract`; de health-module
+gebruikt ze al (F01).
+
+**Nog open in dit blok:** de daadwerkelijke registratie van de guards op de
+Nest-app (APP_GUARD-providers in de bootstrap) — bewust hier niet aangezet:
+zodra HealthModule globaal guards draagt moet de health-route een recht en een
+tenant-claim hebben; dat hoort bij de eerste functionele module (V01), niet bij
+de guard-bouwstenen.

@@ -207,6 +207,12 @@ export interface DecodedAccessToken {
   readonly exp: number;
   readonly iss: string;
   readonly aud: string | string[];
+  /** De persoons-id als bigint (afgeleid van `sub`). */
+  readonly persoonId: bigint;
+  /** De actieve VvE uit het token, of null bij een sessie zonder VvE-keuze. */
+  readonly vveId: bigint | null;
+  /** Heeft de gebruiker op dit verzoek opnieuw MFA geleverd (herauthenticatie)? */
+  readonly mfaGeauthenticeerd: boolean;
 }
 
 /**
@@ -239,11 +245,22 @@ export async function verifieerAccessToken(
   if (klok.nu().getTime() > expSec * 1000) {
     throw new JOSEError('Token is verlopen (exp-claim)');
   }
+  // Eigen claims: vve_id (optioneel) en mfa (herauthenticatie-markering, F07/F08).
+  const vveClaim = claims['vve_id'];
+  const vveId = typeof vveClaim === 'string' && /^\d+$/.test(vveClaim) ? BigInt(vveClaim) : null;
+  const mfaClaim = claims['mfa'];
+  const sub = claims['sub'] ?? '';
+  if (!/^\d+$/.test(sub)) {
+    throw new JOSEError('sub-claim is geen persoons-id');
+  }
   return {
-    sub: claims['sub'] ?? '',
+    sub,
     exp: expSec,
     iss: claims['iss'] ?? '',
     aud: claims['aud'] ?? [],
+    persoonId: BigInt(sub),
+    vveId,
+    mfaGeauthenticeerd: mfaClaim === true,
   };
 }
 
