@@ -834,3 +834,39 @@ controller-verantwoordelijkheid; de service levert de ruwe toestand.
 (de guards/controllers) komt die op de HTTP-rand: 0/1/5/15/30/60 s per poging.
 De vertraging moet dan vóór het antwoord, niet vóór de verificatie — anders
 verliest de blokkade zijn functie.
+
+### Herziening na review (10-09-2026) — F06c en afsluiting F06
+
+De inlogflow is helder opgezet: één foutklasse voor onbekend adres én verkeerd wachtwoord,
+blokkadecontrole vóór verificatie, teller gereset bij succes. Vier correcties, waarvan twee
+die in productie merkbaar zouden zijn.
+
+1. **De blokkade kon permanent worden gemaakt.** Na vijf missers werd het account 15 minuten
+   geblokkeerd, maar `mislukte_pogingen` bleef daarna op 5 staan. De eerstvolgende misser
+   telde door naar 6 en leverde meteen een nieuwe blokkade op. Wie alleen het e-mailadres
+   kent, houdt een account daarmee onbeperkt dicht met één poging per kwartier — een
+   gerichte denial-of-service tegen een individuele eigenaar. Een verlopen blokkade begint nu
+   een nieuw venster; een regressietest legt dat vast.
+2. **Onbekende accounts waren aan de responstijd te herkennen.** De melding was identiek,
+   maar bij een onbekend adres keerde de functie direct terug terwijl een bestaand adres
+   tientallen milliseconden argon2 kostte. Daarmee is de opsomming van bestaande accounts
+   alsnog mogelijk — precies wat de identieke melding moest voorkomen. Er wordt nu tegen een
+   vaste dummyhash geverifieerd. De bouwsessie had dit zelf als verbeterrichting genoteerd;
+   dit was het blok waarin het thuishoorde.
+3. **`apparaten()` merkte ingetrokken sessies als actief aan.** De vlag werd afgeleid uit
+   `laatste_gebruikt_op`, en die wordt al bij uitgifte gezet. Juist in het scherm waarin
+   iemand een gestolen sessie moet herkennen, stond die dus als actief. Nu op
+   `ingetrokken_op IS NULL` én niet verlopen.
+4. **`new Date()` in plaats van de geïnjecteerde `Klok`** (§7.3), waardoor de blokkadetermijn
+   niet te testen was zonder werkelijk te wachten. `Klok` is nu verplicht in de config.
+
+**Twee openstaande punten, bewust niet gerepareerd:**
+
+- **Rate limiting per IP ontbreekt.** §7.6 vraagt 5 pogingen per account én 20 per IP, met
+  oplopende vertraging. Alleen de accountgrens bestaat; `info.ip` wordt niet gebruikt. Een
+  IP-teller vraagt om opslag en een keuze waar die leeft, wat bij de HTTP-laag (F08) hoort.
+- **`moetHerhashen` wordt nog niet aangeroepen bij inloggen**, terwijl §8.1 dat eist en het
+  primitief sinds F06a bestaat. De inlogflow is de enige plek met het platte wachtwoord in
+  handen; zonder die aanroep blijven oude hashes staan.
+
+Beide horen in F08 of een expliciet vervolgblok, niet in een review.

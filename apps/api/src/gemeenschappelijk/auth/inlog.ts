@@ -16,8 +16,22 @@ import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import { apparaatSessie } from '../../database/schema/apparaat-sessie.js';
 import { persoon } from '../../database/schema/persoon.js';
+import type { Klok } from '../system-klok.js';
 import type { ApparaatInfo, TokenService } from './token.js';
-import { verifieerWachtwoord } from './wachtwoord.js';
+import { hashWachtwoord, verifieerWachtwoord } from './wachtwoord.js';
+
+/**
+ * Eén argon2-hash van een willekeurige waarde, om tegen te verifiëren wanneer het
+ * account niet bestaat. Zonder deze stap keert een onbekend e-mailadres direct terug
+ * terwijl een bestaand adres tientallen milliseconden argon2 kost: de melding is dan
+ * wel identiek, maar de responstijd verraadt alsnog welke accounts bestaan. De hash
+ * wordt één keer berekend en hergebruikt.
+ */
+let dummyHashBelofte: Promise<string> | null = null;
+function dummyHash(): Promise<string> {
+  dummyHashBelofte ??= hashWachtwoord(`nooit-een-echt-wachtwoord-${String(Date.now())}`);
+  return dummyHashBelofte;
+}
 
 /** Grenzen uit spec §7.6. */
 export const MAX_POGINGEN_PER_ACCOUNT = 5;
@@ -72,11 +86,7 @@ export interface InlogService {
    * poging geteld en (vanaf de vijfde) het account geblokkeerd tot
    * 15 minuten ná de laatste mislukte poging.
    */
-  inlog(
-    email: string,
-    wachtwoord: string,
-    info: InlogVerzoek,
-  ): Promise<InlogUitkomst>;
+  inlog(email: string, wachtwoord: string, info: InlogVerzoek): Promise<InlogUitkomst>;
 
   /** Apparatenlijst voor het profiel (alle sessie-rijen met status, §7.6). */
   apparaten(persoonId: bigint): Promise<ApparaatRij[]>;
@@ -85,26 +95,25 @@ export interface InlogService {
 export function maakInlogService(config: {
   readonly db: NodePgDatabase;
   readonly tokens: TokenService;
+  /** Geïnjecteerd (spec §7.3): anders is de blokkadetermijn niet te testen zonder te wachten. */
+  readonly klok: Klok;
 }): InlogService {
-  const { db, tokens } = config;
+  const { db, tokens, klok } = config;
 
   return {
     async inlog(email, wachtwoord, info) {
       // 1. Zoek de persoon (citext is case-insensitief, migratie 0001).
-      const [rij] = await db
-        .select()
-        .from(persoon)
-        .where(eq(persoon.email, email))
-        .limit(1);
+      const [rij] = await db.select().from(persoon).where(eq(persoon.email, email)).limit(1);
 
       if (!rij || rij.wachtwoordHash === null || !rij.actief) {
-        // Identieke melding voor onbekend adres, wachtwoordloos account en
-        // gedeactiveerd account (§7.6: altijd dezelfde foutmelding).
+        // Identieke melding én vergelijkbare responstijd voor onbekend adres,
+        // wachtwoordloos account en gedeactiveerd account (§7.6).
+        await verifieerWachtwoord(wachtwoord, await dummyHash());
         throw new OnjuisteInloggegevensFout();
       }
 
       // 2. Blokkade check vóór verificatie (fail closed op het account).
-      const nu = new Date();
+      const nu = klok.nu();
       if (rij.geblokkeerdTot !== null && rij.geblokkeerdTot.getTime() > nu.getTime()) {
         throw new AccountGeblokkeerdFout(rij.geblokkeerdTot);
       }
@@ -112,7 +121,14 @@ export function maakInlogService(config: {
       // 3. Verifieer. Elke mislukte poging wordt geteld; een geslaagde reset.
       const correct = await verifieerWachtwoord(wachtwoord, rij.wachtwoordHash);
       if (!correct) {
-        const pogingen = rij.misluktePogingen + 1;
+        // Een verlopen blokkade begint een nieuw venster. Zonder deze reset blijft
+        // de teller op het maximum staan en levert élke volgende misser meteen weer
+        // een blokkade van 15 minuten op — dan houdt iemand die alleen het
+        // e-mailadres kent het account onbeperkt dicht met één poging per kwartier.
+        const vensterVerlopen =
+          rij.geblokkeerdTot !== null && rij.geblokkeerdTot.getTime() <= nu.getTime();
+        const basis = vensterVerlopen ? 0 : rij.misluktePogingen;
+        const pogingen = basis + 1;
         const blokkeerTot =
           pogingen >= MAX_POGINGEN_PER_ACCOUNT
             ? new Date(nu.getTime() + ACCOUNT_POGINGEN_VENSTER_MINUTEN * 60_000)
@@ -152,12 +168,20 @@ export function maakInlogService(config: {
           ipLaatste: apparaatSessie.ipLaatste,
           laatsteGebruiktOp: apparaatSessie.laatsteGebruiktOp,
           aangemaaktOp: apparaatSessie.aangemaaktOp,
+          ingetrokkenOp: apparaatSessie.ingetrokkenOp,
+          verlooptOp: apparaatSessie.verlooptOp,
         })
         .from(apparaatSessie)
         .where(eq(apparaatSessie.persoonId, persoonId));
-      // Alle sessie-rijen met hun status; het profiel toont ook historie
-      // (spec §7.6: apparatenlijst met platform, laatste gebruik en IP).
-      return rijen.map((r) => ({ ...r, actief: r.laatsteGebruiktOp !== null }));
+      // Actief = niet ingetrokken én niet verlopen. `laatsteGebruiktOp` zegt daar
+      // niets over: die wordt bij uitgifte al gezet, dus op die maatstaf zou een
+      // ingetrokken sessie zich als actief voordoen — juist in het scherm waarin
+      // iemand een gestolen sessie moet herkennen.
+      const nu = klok.nu().getTime();
+      return rijen.map(({ ingetrokkenOp, verlooptOp, ...r }) => ({
+        ...r,
+        actief: ingetrokkenOp === null && verlooptOp.getTime() > nu,
+      }));
     },
   };
 }

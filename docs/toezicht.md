@@ -6,19 +6,16 @@ nodig verbeterd, en apart gecommit (bericht `FXX-review: ...`).
 
 ## Huidig doel
 
-**F06** — Auth: argon2id, inloggen, JWT-access, refresh met rotatie en hergebruikdetectie,
-`apparaat_sessie`, apparatenlijst. Status: **nog niet gestart**.
+**F07** — MFA: passkeys (SimpleWebAuthn) als primaire methode, TOTP en herstelcodes als
+terugval, gekoppeld aan de geldstroomrechten. Status: **in uitvoering** (niet-gecommit werk
+in `schema/passkey.ts` en migratie `0006_passkey.sql`).
 
-Klaar-signaal: een commit die met `F06:` begint of `F06 klaar` bevat, een migratie voor
-`apparaat_sessie`, auth-code in `apps/api/src/gemeenschappelijk/auth/`, en een schone werkboom.
+Klaar-signaal: een commit die met `F07:` begint of `F07 klaar` bevat, WebAuthn-code in
+`apps/api/src/gemeenschappelijk/auth/`, en een schone werkboom.
 
-Aandacht bij dit blok — het raakt de geldstroom, dus hier gelden de patronen uit blok F12:
-`Math.random()` of `Date.now()` als entropiebron, modulo-bias in een tekenalfabet, een
-gegenereerd wachtwoord of token dat in een log- of auditpad belandt, een omgevingsvlag die
-authenticatie omzeilt, ongehasht opgeslagen tokens (§6.3 schrijft `token_hash` voor), en
-tijdsafhankelijke tokenvergelijking in plaats van `timingSafeEqual`. Verder: test 29 en 35
-uit §11 (opnieuw versturen invalideert alle sessies; hergebruik van een refresh token trekt
-de hele familie in).
+Let op: `schema/passkey.ts` compileert op dit moment niet — hij importeert `bytea` uit
+`drizzle-orm/pg-core`, terwijl F03 dat als eigen `customType` in `schema/types.ts` zette.
+Daardoor faalt `npm run build` zolang dat bestand zo blijft.
 
 ## Werkwijze per blok
 

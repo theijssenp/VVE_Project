@@ -18,16 +18,20 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import {
   AccountGeblokkeerdFout,
+  MAX_POGINGEN_PER_ACCOUNT,
   maakInlogService,
   OnjuisteInloggegevensFout,
   type InlogService,
 } from '../src/gemeenschappelijk/auth/inlog.js';
+import { hashWachtwoord } from '../src/gemeenschappelijk/auth/wachtwoord.js';
+import { apparaatSessie } from '../src/database/schema/apparaat-sessie.js';
 import { maakTokenService } from '../src/gemeenschappelijk/auth/token.js';
 import { SystemKlok } from '../src/gemeenschappelijk/system-klok.js';
 import { persoon } from '../src/database/schema/persoon.js';
 import { gedeeldeTestDb, type TestPgDb } from './testcontainers.js';
 
 const GEHEIM = 'x'.repeat(32);
+const WACHTWOORD = 'een-voldoende-lang-wachtwoord';
 
 describe('Inlogservice (F06c, §7.6)', () => {
   let db: TestPgDb | undefined;
@@ -36,7 +40,7 @@ describe('Inlogservice (F06c, §7.6)', () => {
   beforeAll(async () => {
     db = await gedeeldeTestDb();
     const tokens = maakTokenService({ db: db.db, geheim: GEHEIM, klok: new SystemKlok() });
-    service = maakInlogService({ db: db.db, tokens });
+    service = maakInlogService({ db: db.db, tokens, klok: new SystemKlok() });
   });
 
   afterAll(async () => {
@@ -44,7 +48,10 @@ describe('Inlogservice (F06c, §7.6)', () => {
   });
 
   /** Seed een persoon met wachtwoordhash; uniek e-mail per test. */
-  async function seed(volgnummer: number, wachtwoord: string): Promise<{ id: bigint; email: string }> {
+  async function seed(
+    volgnummer: number,
+    wachtwoord: string,
+  ): Promise<{ id: bigint; email: string }> {
     if (!db) throw new Error('geen test-db');
     const { hashWachtwoord } = await import('../src/gemeenschappelijk/auth/wachtwoord.js');
     const email = `inlog${String(volgnummer)}@test.vve`;
@@ -126,9 +133,9 @@ describe('Inlogservice (F06c, §7.6)', () => {
     if (!db || !service) throw new Error('geen setup');
     const { email } = await seed(4, 'Wachtwoord-vier-2026!');
 
-    await expect(
-      service.inlog(email, 'fout-een-2026!', { platform: 'web' }),
-    ).rejects.toThrow(OnjuisteInloggegevensFout);
+    await expect(service.inlog(email, 'fout-een-2026!', { platform: 'web' })).rejects.toThrow(
+      OnjuisteInloggegevensFout,
+    );
     const geslaagd = await service.inlog(email, 'Wachtwoord-vier-2026!', {
       platform: 'web',
     });
@@ -173,5 +180,94 @@ describe('Inlogservice (F06c, §7.6)', () => {
     );
     expect(rows[0]?.ingetrokken).not.toBeNull();
     expect(rows[0]?.reden).toBe('uitgelogd');
+  });
+});
+
+describe('Inlog — review F06c', () => {
+  let db: TestPgDb | undefined;
+  let service: InlogService | undefined;
+  let persoonId: bigint;
+
+  beforeAll(async () => {
+    db = await gedeeldeTestDb();
+    const tokens = maakTokenService({ db: db.db, geheim: GEHEIM, klok: new SystemKlok() });
+    service = maakInlogService({ db: db.db, tokens, klok: new SystemKlok() });
+    const [rij] = await db.db
+      .insert(persoon)
+      .values({
+        email: `review-f06c-${String(Date.now())}@example.test`,
+        achternaam: 'Reviewer',
+        wachtwoordHash: await hashWachtwoord(WACHTWOORD),
+      })
+      .returning();
+    if (!rij) throw new Error('seed mislukt');
+    persoonId = rij.id;
+  });
+  afterAll(async () => {
+    await db?.stop();
+  });
+
+  it('een verlopen blokkade begint een nieuw venster in plaats van meteen opnieuw te blokkeren', async () => {
+    if (!db) throw new Error('geen test-db');
+    const [rij] = await db.db.select().from(persoon).where(eq(persoon.id, persoonId)).limit(1);
+    if (!rij) throw new Error('persoon weg');
+
+    // Situatie na een uitgezeten blokkade: teller op het maximum, blokkade verlopen.
+    await db.db
+      .update(persoon)
+      .set({
+        misluktePogingen: MAX_POGINGEN_PER_ACCOUNT,
+        geblokkeerdTot: new Date(Date.now() - 60_000),
+      })
+      .where(eq(persoon.id, persoonId));
+
+    // Eén misser mag geen nieuwe blokkade opleveren.
+    if (!service) throw new Error('geen service');
+    await expect(service.inlog(rij.email, 'fout-wachtwoord', {})).rejects.toBeInstanceOf(
+      OnjuisteInloggegevensFout,
+    );
+    const [na] = await db.db.select().from(persoon).where(eq(persoon.id, persoonId)).limit(1);
+    expect(na?.misluktePogingen).toBe(1);
+    expect(na?.geblokkeerdTot).toBeNull();
+
+    // En het juiste wachtwoord werkt gewoon weer.
+    await expect(service.inlog(rij.email, WACHTWOORD, {})).resolves.toMatchObject({ persoonId });
+  });
+
+  it('een onbekend adres kost vergelijkbare tijd als een bestaand adres', async () => {
+    if (!db) throw new Error('geen test-db');
+    const [rij] = await db.db.select().from(persoon).where(eq(persoon.id, persoonId)).limit(1);
+    if (!rij) throw new Error('persoon weg');
+
+    const meet = async (email: string): Promise<number> => {
+      const start = process.hrtime.bigint();
+      await service?.inlog(email, 'fout-wachtwoord', {}).catch(() => undefined);
+      return Number(process.hrtime.bigint() - start) / 1e6;
+    };
+    await meet(rij.email); // opwarmen (dummyhash en argon2-cache)
+    const bestaand = await meet(rij.email);
+    const onbekend = await meet('bestaat-niet-f06c@example.test');
+
+    // Zonder dummyhash keert het onbekende adres bijna direct terug (< 1 ms) terwijl
+    // het bestaande tientallen milliseconden argon2 kost. Met dummyhash liggen ze
+    // in dezelfde orde van grootte.
+    expect(onbekend).toBeGreaterThan(bestaand * 0.3);
+  });
+
+  it('apparatenlijst merkt een ingetrokken sessie niet als actief aan', async () => {
+    if (!db) throw new Error('geen test-db');
+    const [rij] = await db.db.select().from(persoon).where(eq(persoon.id, persoonId)).limit(1);
+    if (!rij) throw new Error('persoon weg');
+
+    if (!service) throw new Error('geen service');
+    const { sessieId } = await service.inlog(rij.email, WACHTWOORD, { platform: 'web' });
+    await db.db
+      .update(apparaatSessie)
+      .set({ ingetrokkenOp: new Date() })
+      .where(eq(apparaatSessie.id, sessieId));
+
+    const lijst = await service.apparaten(persoonId);
+    const deze = lijst.find((a) => a.sessieId === sessieId);
+    expect(deze?.actief).toBe(false);
   });
 });
