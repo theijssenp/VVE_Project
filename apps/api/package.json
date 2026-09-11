@@ -8,17 +8,21 @@
     "start": "node dist/main.js",
     "build": "tsc -b",
     "clean": "tsc -b --clean",
-    "db:migrate": "node --experimental-strip-types src/database/run-migraties.ts",
-    "db:migrate:dist": "node dist/src/database/run-migraties.js"
+    "db:migrate": "node --env-file-if-exists=../../.env --experimental-strip-types src/database/run-migraties.ts",
+    "db:opnieuw": "node --env-file-if-exists=../../.env --experimental-strip-types src/database/opnieuw-opbouwen.ts",
+    "db:opnieuw:seed": "npm run db:opnieuw && npm run seed:beheerder --",
+    "seed:beheerder": "npm run build && node --env-file-if-exists=../../.env dist/src/database/seeds/beheerder.js"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.0",
     "@nestjs/core": "^11.0.0",
     "@nestjs/platform-express": "^11.0.0",
     "@simplewebauthn/server": "^14.0.1",
+    "@types/cookie-parser": "^1.4.10",
     "@types/pg": "^8.23.1",
     "@vve/contract": "*",
     "argon2": "^0.45.1",
+    "cookie-parser": "^1.4.7",
     "drizzle-orm": "^0.45.2",
     "jose": "^6.2.12",
     "nestjs-zod": "^5.5.0",

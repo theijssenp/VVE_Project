@@ -24,11 +24,8 @@ import { inject } from '@angular/core';
 import { type Observable, catchError, from, switchMap, throwError } from 'rxjs';
 
 import { AuthService } from './auth.service.js';
-import { EnkeleVerversing, magVerversen } from './verversing.js';
+import { magVerversen } from './verversing.js';
 import { naarApiFout } from './fout.js';
-
-/** Gedeeld over alle verzoeken: hoogstens één verversing tegelijk (§7.6). */
-const verversing = new EnkeleVerversing();
 
 function metToken(verzoek: HttpRequest<unknown>, token: string | null): HttpRequest<unknown> {
   if (token === null) return verzoek;
@@ -53,7 +50,9 @@ export const authInterceptor: HttpInterceptorFn = (
       if (!herhaalbaar) {
         return throwError(() => naarApiFout(fout.status, fout.error));
       }
-      return from(verversing.voerUit(() => auth.ververs())).pipe(
+      // De poort zit in AuthService, niet hier: het herstel bij opstarten
+      // ververst langs hetzelfde slot, en twee sloten is geen slot (§7.6).
+      return from(auth.verversEenmalig()).pipe(
         switchMap((nieuw) => {
           if (nieuw === null) {
             // Verversen lukte niet: de sessie is echt voorbij.

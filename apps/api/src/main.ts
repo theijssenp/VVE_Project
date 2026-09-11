@@ -1,8 +1,14 @@
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { Logger } from '@nestjs/common';
-import { HealthModule } from './modules/health/health.module.js';
+import cookieParser from 'cookie-parser';
+
+import { AppModule } from './app.module.js';
+import { BigIntInterceptor } from './gemeenschappelijk/bigint.interceptor.js';
+import { HttpFoutFilter } from './gemeenschappelijk/http-fout.filter.js';
 import { HealthController } from './modules/health/health.controller.js';
+import { AuthController } from './modules/auth/auth.controller.js';
+import { VveController } from './modules/vve/vve.controller.js';
 import { controleerRouteDeclaraties } from './gemeenschappelijk/auth/route-inventaris.js';
 
 /**
@@ -15,27 +21,48 @@ import { controleerRouteDeclaraties } from './gemeenschappelijk/auth/route-inven
  * Alle controllers van de applicatie. Een nieuwe module voegt zijn controller
  * hier toe; de opstartcontrole leest daaruit de werkelijke routes.
  */
-export const ALLE_CONTROLLERS = [HealthController];
+export const ALLE_CONTROLLERS = [HealthController, AuthController, VveController];
 
 export async function bootstrap(): Promise<void> {
   // Test #32 (spec §7.5): geen route zonder rechtdeclaratie, vóór er iets luistert.
   controleerRouteDeclaraties(ALLE_CONTROLLERS);
-  const app = await NestFactory.create(HealthModule);
+  const app = await NestFactory.create(AppModule);
+  // Alles onder /api, zodat Caddy (en de dev-proxy) client en API kunnen scheiden.
+  app.setGlobalPrefix('api');
+  // Het refresh-token komt als httpOnly-cookie binnen (§7.6).
+  app.use(cookieParser());
+  // Alle sleutels zijn bigint; zonder dit faalt elk antwoord met een id (§6).
+  app.useGlobalInterceptors(new BigIntInterceptor());
+  // Eén foutvorm voor de hele API: { code, melding, referentie } (§8.2).
+  app.useGlobalFilters(new HttpFoutFilter());
   const port = Number(process.env['PORT'] ?? 3000);
 
   await app.listen(port);
   Logger.log(
-    `VvE-API luistert op http://localhost:${String(port)} (health: GET /health)`,
+    `VvE-API luistert op http://localhost:${String(port)} (health: GET /api/health)`,
     'Bootstrap',
   );
 }
 
-// De e2e-test importeert `health.module.js` rechtstreeks (niet dit bestand),
-// dus is dit de enige plek waar de luister-service wordt opgestart.
-bootstrap().catch((error: unknown) => {
-  Logger.error(
-    error instanceof Error ? (error.stack ?? error.message) : String(error),
-    'Bootstrap',
-  );
-  process.exit(1);
-});
+/**
+ * Alleen opstarten als dit bestand het startpunt van het proces is.
+ *
+ * Zonder deze controle start élke import van dit bestand een echte server op
+ * poort 3000. De guard-test (test #32) importeert het juist om
+ * {@link ALLE_CONTROLLERS} te lezen, en liep daardoor vast op een ontbrekende
+ * `DATABASE_URL` — een testfout die niets met de test te maken had. Zelfde
+ * patroon als in `database/seeds/beheerder.ts`.
+ */
+const isStartpunt =
+  typeof process.argv[1] === 'string' &&
+  (process.argv[1].endsWith('main.js') || process.argv[1].endsWith('main.ts'));
+
+if (isStartpunt) {
+  bootstrap().catch((error: unknown) => {
+    Logger.error(
+      error instanceof Error ? (error.stack ?? error.message) : String(error),
+      'Bootstrap',
+    );
+    process.exit(1);
+  });
+}

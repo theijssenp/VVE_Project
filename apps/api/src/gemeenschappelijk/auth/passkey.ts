@@ -17,8 +17,20 @@ import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { passkey } from '../../database/schema/passkey.js';
 import { persoon } from '../../database/schema/persoon.js';
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const swa = require('@simplewebauthn/server') as typeof import('@simplewebauthn/server');
+/**
+ * `@simplewebauthn/server` wordt lui geladen.
+ *
+ * `require()` kan hier niet: `apps/api` is een ESM-pakket (`"type": "module"`),
+ * en de gecompileerde `.js` liep daar bij het opstarten op stuk — de API kwam
+ * niet eens tot luisteren. Een statische `import` zou het pakket bij elke start
+ * inladen, ook wanneer er geen passkey aan te pas komt; een dynamische import
+ * doet dat pas bij het eerste gebruik.
+ */
+let swaBelofte: Promise<typeof import('@simplewebauthn/server')> | null = null;
+function swaLaden(): Promise<typeof import('@simplewebauthn/server')> {
+  swaBelofte ??= import('@simplewebauthn/server');
+  return swaBelofte;
+}
 
 /** Relying Party — in productie de domeinnaam; via config. */
 export interface PasskeyServiceConfig {
@@ -107,7 +119,9 @@ export function maakPasskeyService(config: PasskeyServiceConfig): {
         .select({ credentialId: passkey.credentialId })
         .from(passkey)
         .where(eq(passkey.persoonId, persoonId));
-      const opties = await swa.generateRegistrationOptions({
+      const opties = await (
+        await swaLaden()
+      ).generateRegistrationOptions({
         rpName: rpNaam,
         rpID: rpId,
         userID: new TextEncoder().encode(`vve:${String(persoonId)}`),
@@ -125,9 +139,11 @@ export function maakPasskeyService(config: PasskeyServiceConfig): {
       if (verwachteChallenge === null) {
         throw new PasskeyVerificatieFout('registratie-challenge verlopen of onbekend');
       }
-      const verificatie = await swa.verifyRegistrationResponse({
+      const verificatie = await (
+        await swaLaden()
+      ).verifyRegistrationResponse({
         response: antwoord as unknown as Parameters<
-          typeof swa.verifyRegistrationResponse
+          (typeof import('@simplewebauthn/server'))['verifyRegistrationResponse']
         >[0]['response'],
         expectedChallenge: verwachteChallenge,
         expectedOrigin: origin,
@@ -168,7 +184,9 @@ export function maakPasskeyService(config: PasskeyServiceConfig): {
           }));
         }
       }
-      const opties = await swa.generateAuthenticationOptions({
+      const opties = await (
+        await swaLaden()
+      ).generateAuthenticationOptions({
         rpID: rpId,
         allowCredentials: toegestane,
         userVerification: 'preferred',
@@ -207,9 +225,11 @@ export function maakPasskeyService(config: PasskeyServiceConfig): {
       if (verwachteChallenge === null) {
         throw new PasskeyVerificatieFout('authenticatie-challenge verlopen of onbekend');
       }
-      const verificatie = await swa.verifyAuthenticationResponse({
+      const verificatie = await (
+        await swaLaden()
+      ).verifyAuthenticationResponse({
         response: antwoord as unknown as Parameters<
-          typeof swa.verifyAuthenticationResponse
+          (typeof import('@simplewebauthn/server'))['verifyAuthenticationResponse']
         >[0]['response'],
         expectedChallenge: verwachteChallenge,
         expectedOrigin: origin,

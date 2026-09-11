@@ -21,14 +21,22 @@
             "assets": []
           },
           "configurations": {
-            "production": { "outputHashing": "all" },
-            "development": { "optimization": false, "sourceMap": true }
+            "production": {
+              "outputHashing": "all"
+            },
+            "development": {
+              "optimization": false,
+              "sourceMap": true
+            }
           },
           "defaultConfiguration": "production"
         },
         "serve": {
           "builder": "@angular/build:dev-server",
-          "options": { "buildTarget": "vve-app:build:development" }
+          "options": {
+            "buildTarget": "vve-app:build:development",
+            "proxyConfig": "proxy.conf.json"
+          }
         }
       }
     }

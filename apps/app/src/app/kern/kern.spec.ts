@@ -12,8 +12,10 @@ import {
   GeheugenAccessToken,
   VeiligeOpslagTokenOpslag,
 } from './token-opslag.js';
-import { EnkeleVerversing, magVerversen } from './verversing.js';
+import { EnkeleVerversing, magVerversen, metTijdslimiet } from './verversing.js';
 import { isSessieVerlopen, naarApiFout } from './fout.js';
+import { startRoute } from './start-route.js';
+import type { Profiel, ProfielVve } from './auth.service.js';
 
 describe('Tokenopslag (spec §7.6)', () => {
   it('bewaart het refresh-token op web nergens: dat is de httpOnly-cookie', async () => {
@@ -123,5 +125,117 @@ describe('Foutafhandeling (spec §8.2)', () => {
   it('herkent een verlopen sessie alleen aan een 401', () => {
     expect(isSessieVerlopen(naarApiFout(401, null))).toBe(true);
     expect(isSessieVerlopen(naarApiFout(403, null))).toBe(false);
+  });
+});
+
+describe('Startscherm per rol (spec §9: twee schillen)', () => {
+  const vveRol: ProfielVve = {
+    vveId: '1',
+    naam: 'VvE Zonnehof',
+    plaats: 'Utrecht',
+    status: 'actief',
+    boekjaarStartmaand: 1,
+    rol: 'beheerder',
+  };
+  const profiel = (velden: Partial<Profiel>): Profiel => ({
+    persoonId: '1',
+    email: 'iemand@voorbeeld.nl',
+    naam: 'Iemand',
+    isApplicatiebeheerder: false,
+    wachtwoordWijzigenVerplicht: false,
+    vves: [],
+    ...velden,
+  });
+
+  it('stuurt de applicatiebeheerder naar de beheeromgeving', () => {
+    expect(startRoute(profiel({ isApplicatiebeheerder: true }))).toBe('/beheer');
+  });
+
+  it('stuurt een VvE-beheerder naar zijn eigen VvE en niet naar het opvoerscherm', () => {
+    // De kern van de bug: /beheer is het scherm waar VvE's worden opgevoerd.
+    // Daar hoort alleen de applicatiebeheerder te komen.
+    expect(startRoute(profiel({ vves: [vveRol] }))).toBe('/vve');
+  });
+
+  it('stuurt een eigenaar zonder rol naar het portaal', () => {
+    expect(startRoute(profiel({}))).toBe('/portaal');
+  });
+
+  it('laat de applicatiebeheerder vóór een eigen VvE-rol gaan', () => {
+    expect(startRoute(profiel({ isApplicatiebeheerder: true, vves: [vveRol] }))).toBe('/beheer');
+  });
+
+  it('stuurt zonder profiel naar het inlogscherm', () => {
+    expect(startRoute(null)).toBe('/inloggen');
+  });
+
+  it('stuurt een beheerder van een gearchiveerde VvE nog steeds naar zijn overzicht', () => {
+    // Daar staat waarom hij niets kan; op /beheer zou hij een 403 krijgen.
+    expect(startRoute(profiel({ vves: [{ ...vveRol, status: 'gearchiveerd' }] }))).toBe('/vve');
+  });
+});
+
+describe('Sessieherstel bij opstarten (spec §7.6)', () => {
+  it('geeft het token terug wanneer de verversing op tijd klaar is', async () => {
+    await expect(metTijdslimiet(Promise.resolve('vers-token'), 1000, null)).resolves.toBe(
+      'vers-token',
+    );
+  });
+
+  it('geeft na de tijdslimiet op, zodat een trage server geen wit scherm oplevert', async () => {
+    vi.useFakeTimers();
+    try {
+      const nooit = new Promise<string | null>(() => {
+        /* antwoordt nooit */
+      });
+      const uitkomst = metTijdslimiet(nooit, 8000, null);
+      await vi.advanceTimersByTimeAsync(8000);
+      await expect(uitkomst).resolves.toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('telt een fout als "niet gelukt" in plaats van hem door te laten slaan', async () => {
+    // Bij het opstarten valt er met een fout niets te beginnen: de gebruiker
+    // hoort dan gewoon het inlogscherm te zien.
+    await expect(metTijdslimiet(Promise.reject(new Error('netwerk')), 1000, null)).resolves.toBe(
+      null,
+    );
+  });
+
+  it('laat een laat antwoord geen onbehandelde afwijzing achter', async () => {
+    // Komt de fout ná de tijdslimiet binnen, dan is de race al beslist. Zonder
+    // eigen vangnet zou dat een unhandled rejection zijn.
+    vi.useFakeTimers();
+    const laat = new Promise<string | null>((_, af) => {
+      setTimeout(() => {
+        af(new Error('te laat'));
+      }, 5000);
+    });
+    try {
+      const uitkomst = metTijdslimiet(laat, 1000, null);
+      await vi.advanceTimersByTimeAsync(6000);
+      await expect(uitkomst).resolves.toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('laat twee gelijktijdige verversingen op één verzoek uitkomen', async () => {
+    // Twee keer hetzelfde refresh-token inwisselen leest de server als diefstal
+    // en trekt de hele familie in. Opstartherstel en interceptor delen daarom
+    // dezelfde poort.
+    const poort = new EnkeleVerversing();
+    let aanroepen = 0;
+    const ververs = async (): Promise<string> => {
+      aanroepen += 1;
+      await Promise.resolve();
+      return 'token';
+    };
+    const [a, b] = await Promise.all([poort.voerUit(ververs), poort.voerUit(ververs)]);
+    expect(aanroepen).toBe(1);
+    expect(a).toBe('token');
+    expect(b).toBe('token');
   });
 });

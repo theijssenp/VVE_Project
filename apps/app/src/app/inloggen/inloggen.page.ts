@@ -13,6 +13,7 @@ import {
 } from '@ionic/angular';
 
 import { AuthService } from '../kern/auth.service.js';
+import { startRoute } from '../kern/start-route.js';
 import type { ApiFout } from '../kern/fout.js';
 
 @Component({
@@ -61,6 +62,16 @@ import type { ApiFout } from '../kern/fout.js';
             <ion-note>Referentie: {{ f.referentie }}</ion-note>
           }
         }
+        <!--
+          Enter in een invoerveld moet het formulier versturen. De enige
+          submit-knop hieronder is een <ion-button>, en diens echte
+          <button type="submit"> zit in de shadow DOM — die telt niet mee voor
+          de impliciete submit van de browser. Bij twee velden gebeurt er dan
+          bij Enter helemaal niets (klikken werkt wel: Ionic geeft de klik zelf
+          door). Deze verborgen knop geeft de browser de submit-knop terug die
+          hij nodig heeft.
+        -->
+        <button type="submit" tabindex="-1" aria-hidden="true" style="display: none"></button>
         <ion-button expand="block" type="submit" [disabled]="bezig()">Inloggen</ion-button>
       </form>
     </ion-content>
@@ -82,7 +93,13 @@ export class InloggenPage {
       await this.#auth.inloggen(this.email, this.wachtwoord);
       // Het wachtwoord blijft niet in het component hangen.
       this.wachtwoord = '';
-      await this.#router.navigate([this.#auth.mfaVereist() ? '/mfa' : '/portaal']);
+      if (this.#auth.mfaVereist()) {
+        await this.#router.navigate(['/mfa']);
+        return;
+      }
+      // Waar iemand terechtkomt hangt af van zijn rol, niet van de route die
+      // toevallig als eerste in de lijst staat.
+      await this.#router.navigate([startRoute(await this.#auth.laadProfiel())]);
     } catch (fout: unknown) {
       this.fout.set(fout as ApiFout);
     } finally {

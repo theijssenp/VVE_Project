@@ -11,11 +11,13 @@
  * aanvaller niet kan tellen welke accounts bestaan (spec §7.6).
  */
 
-import { eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import { apparaatSessie } from '../../database/schema/apparaat-sessie.js';
 import { persoon } from '../../database/schema/persoon.js';
+import { rolToewijzing } from '../../database/schema/rol-toewijzing.js';
+import { vve } from '../../database/schema/vve.js';
 import type { Klok } from '../system-klok.js';
 import type { ApparaatInfo, TokenService } from './token.js';
 import { hashWachtwoord, verifieerWachtwoord } from './wachtwoord.js';
@@ -53,6 +55,18 @@ export class OnjuisteInloggegevensFout extends Error {
   }
 }
 
+/**
+ * De sessie verwijst naar een persoon die niet (meer) actief is. Dat is geen
+ * invoerfout van de client maar een ingetrokken account met een nog geldig
+ * access-token; de controller maakt er een 401 van, zodat de client uitlogt.
+ */
+export class OnbekendPersoonFout extends Error {
+  constructor() {
+    super('Onbekend of gedeactiveerd account');
+    this.name = 'OnbekendPersoonFout';
+  }
+}
+
 /** Eén rij in de apparatenlijst (profiel-scherm, spec §7.6). */
 export interface ApparaatRij {
   readonly sessieId: bigint;
@@ -62,6 +76,35 @@ export interface ApparaatRij {
   readonly laatsteGebruiktOp: Date | null;
   readonly aangemaaktOp: Date | null;
   readonly actief: boolean;
+}
+
+/** Eén VvE waar deze persoon een lopende rol in heeft. */
+export interface ProfielVve {
+  readonly vveId: bigint;
+  readonly naam: string;
+  readonly plaats: string | null;
+  readonly status: 'actief' | 'gearchiveerd';
+  readonly boekjaarStartmaand: number;
+  readonly rol: string;
+}
+
+/**
+ * Wie ben ik, en waar hoor ik terecht te komen.
+ *
+ * De client kan dit niet uit het access-token afleiden: dat draagt alleen `sub`
+ * (de persoons-id), een optionele `vve_id` en de MFA-markering — bewust, want
+ * rollen in een token zijn rollen van het moment van uitgifte en verouderen
+ * stil. Daarom vraagt de client het na het inloggen op, en beslist de server
+ * wat waar is.
+ */
+export interface Profiel {
+  readonly persoonId: bigint;
+  readonly email: string;
+  readonly naam: string;
+  readonly isApplicatiebeheerder: boolean;
+  readonly wachtwoordWijzigenVerplicht: boolean;
+  /** Lopende rollen; leeg voor een eigenaar zonder beheerrol. */
+  readonly vves: readonly ProfielVve[];
 }
 
 export interface InlogVerzoek {
@@ -90,6 +133,23 @@ export interface InlogService {
 
   /** Apparatenlijst voor het profiel (alle sessie-rijen met status, §7.6). */
   apparaten(persoonId: bigint): Promise<ApparaatRij[]>;
+
+  /**
+   * Wie is dit, en welke VvE's beheert hij. De client kiest hiermee het
+   * startscherm; de autorisatie zelf blijft op de endpoints staan.
+   */
+  profiel(persoonId: bigint): Promise<Profiel>;
+}
+
+/** `voornaam tussenvoegsel achternaam`, zonder dubbele spaties bij lege delen. */
+function samengesteldeNaam(rij: {
+  voornaam: string | null;
+  tussenvoegsel: string | null;
+  achternaam: string;
+}): string {
+  return [rij.voornaam, rij.tussenvoegsel, rij.achternaam]
+    .filter((deel): deel is string => deel !== null && deel.trim() !== '')
+    .join(' ');
 }
 
 export function maakInlogService(config: {
@@ -182,6 +242,47 @@ export function maakInlogService(config: {
         ...r,
         actief: ingetrokkenOp === null && verlooptOp.getTime() > nu,
       }));
+    },
+
+    async profiel(persoonId) {
+      const [ik] = await db
+        .select({
+          id: persoon.id,
+          email: persoon.email,
+          voornaam: persoon.voornaam,
+          tussenvoegsel: persoon.tussenvoegsel,
+          achternaam: persoon.achternaam,
+          isApplicatiebeheerder: persoon.isApplicatiebeheerder,
+          wachtwoordWijzigenVerplicht: persoon.wachtwoordWijzigenVerplicht,
+        })
+        .from(persoon)
+        .where(and(eq(persoon.id, persoonId), eq(persoon.actief, true)))
+        .limit(1);
+      if (ik === undefined) throw new OnbekendPersoonFout();
+
+      // Alleen lopende rollen: een beëindigde rol geeft geen toegang meer, en
+      // mag dus ook geen startscherm opleveren.
+      const rollen = await db
+        .select({
+          vveId: vve.id,
+          naam: vve.naam,
+          plaats: vve.plaats,
+          status: vve.status,
+          boekjaarStartmaand: vve.boekjaarStartmaand,
+          rol: rolToewijzing.rol,
+        })
+        .from(rolToewijzing)
+        .innerJoin(vve, eq(vve.id, rolToewijzing.vveId))
+        .where(and(eq(rolToewijzing.persoonId, persoonId), isNull(rolToewijzing.eindDatum)));
+
+      return {
+        persoonId: ik.id,
+        email: ik.email,
+        naam: samengesteldeNaam(ik),
+        isApplicatiebeheerder: ik.isApplicatiebeheerder,
+        wachtwoordWijzigenVerplicht: ik.wachtwoordWijzigenVerplicht,
+        vves: rollen,
+      };
     },
   };
 }

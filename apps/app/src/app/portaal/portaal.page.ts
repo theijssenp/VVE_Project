@@ -1,5 +1,5 @@
-import { Component, inject, signal } from '@angular/core';
-import { Router } from '@angular/router';
+import { Component, computed, inject, signal } from '@angular/core';
+import { Router, RouterLink } from '@angular/router';
 import {
   IonBadge,
   IonButton,
@@ -18,6 +18,7 @@ import { AuthService, type Apparaat } from '../kern/auth.service.js';
   selector: 'vve-portaal',
   standalone: true,
   imports: [
+    RouterLink,
     IonBadge,
     IonButton,
     IonContent,
@@ -52,6 +53,18 @@ import { AuthService, type Apparaat } from '../kern/auth.service.js';
         }
       </ion-list>
 
+      <!--
+        Beheer is alleen voor de applicatiebeheerder. De API weigerde de rest al
+        met 403, maar een knop die voor iedereen zichtbaar is en voor bijna
+        niemand werkt, is een foutmelding als functionaliteit. Nu tonen we hem
+        alleen aan wie hem mag gebruiken; de 403 blijft als vangnet staan.
+      -->
+      @if (isApplicatiebeheerder()) {
+        <ion-button expand="block" routerLink="/beheer">VvE-beheer</ion-button>
+      }
+      @if (heeftVveRol()) {
+        <ion-button expand="block" routerLink="/vve">Mijn VvE</ion-button>
+      }
       <ion-button expand="block" fill="outline" (click)="uitloggen()">Uitloggen</ion-button>
     </ion-content>
   `,
@@ -60,6 +73,11 @@ export class PortaalPage {
   readonly #auth = inject(AuthService);
   readonly #router = inject(Router);
   readonly apparaten = signal<Apparaat[]>([]);
+
+  readonly isApplicatiebeheerder = computed(
+    () => this.#auth.profiel()?.isApplicatiebeheerder === true,
+  );
+  readonly heeftVveRol = computed(() => (this.#auth.profiel()?.vves.length ?? 0) > 0);
 
   constructor() {
     void this.#laad();
@@ -71,6 +89,13 @@ export class PortaalPage {
     } catch {
       // De lijst is bijzaak op dit scherm; een fout mag het portaal niet blokkeren.
       this.apparaten.set([]);
+    }
+    try {
+      // Het profiel bepaalt welke knoppen hier horen. Mislukt het, dan blijven
+      // ze weg — liever een knop te weinig dan een knop die op een 403 uitkomt.
+      if (this.#auth.profiel() === null) await this.#auth.laadProfiel();
+    } catch {
+      // Bewust stil: het portaal zelf werkt ook zonder profiel.
     }
   }
 

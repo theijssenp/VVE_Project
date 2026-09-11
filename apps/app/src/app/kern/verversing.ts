@@ -53,3 +53,33 @@ export const ZONDER_VERVERSING = [
 export function magVerversen(url: string): boolean {
   return !ZONDER_VERVERSING.some((pad) => url.includes(pad));
 }
+
+/**
+ * Wacht hoogstens `msLimiet` op `belofte`. Duurt het langer, of loopt de
+ * belofte op een fout, dan komt `bijTeLaat` terug.
+ *
+ * Bedoeld voor het herstellen van de sessie bij het opstarten (§7.6). Die stap
+ * blokkeert het opstarten van de applicatie, en dat mag nooit eindeloos duren:
+ * een server die niet antwoordt hoort een inlogscherm op te leveren, niet een
+ * wit scherm. Een fout telt hier bewust als "niet gelukt" — er valt op dat
+ * moment toch niets anders te doen dan de gebruiker laten inloggen — en zo
+ * blijft er ook geen afgewezen belofte onbehandeld achter wanneer het antwoord
+ * ná de tijdslimiet alsnog binnenkomt.
+ */
+export async function metTijdslimiet<T>(
+  belofte: Promise<T>,
+  msLimiet: number,
+  bijTeLaat: T,
+): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const klok = new Promise<T>((klaar) => {
+    timer = setTimeout(() => {
+      klaar(bijTeLaat);
+    }, msLimiet);
+  });
+  try {
+    return await Promise.race([belofte.catch(() => bijTeLaat), klok]);
+  } finally {
+    clearTimeout(timer);
+  }
+}

@@ -6,6 +6,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "start", "--workspace", "@vve/app"],
       "port": 4200
+    },
+    {
+      "name": "vve-api",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev:api"],
+      "port": 3000
     }
   ]
 }

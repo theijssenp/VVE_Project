@@ -272,6 +272,12 @@ export interface TokenService {
   geefTokensUit(persoon: { readonly id: bigint }, info: ApparaatInfo): Promise<TokensUit>;
   verfris(refreshToken: string, info: ApparaatInfo): Promise<VerfrisUit>;
   trekSessieIn(sessieId: bigint): Promise<{ ingetrokken: boolean }>;
+  /**
+   * Trekt de sessie in die bij dit refresh-token hoort — uitloggen van één
+   * apparaat. Zonder deze methode kon uitloggen alleen via `trekAlleSessiesIn`,
+   * en dan logt afmelden op de laptop je ook af op de telefoon.
+   */
+  trekSessieInViaToken(refreshToken: string): Promise<{ ingetrokken: boolean }>;
   trekAlleSessiesIn(persoonId: bigint): Promise<{ ingetrokken: number }>;
   readonly klok: Klok;
 }
@@ -456,6 +462,20 @@ export function maakTokenService(config: TokenServiceConfig): TokenService {
     }
   }
 
+  async function trekSessieInViaToken(refreshToken: string): Promise<{ ingetrokken: boolean }> {
+    const [geupdate] = await config.db
+      .update(apparaatSessie)
+      .set({ ingetrokkenOp: klok.nu(), intrekkingReden: INTRA_UITGELOGD })
+      .where(
+        and(
+          eq(apparaatSessie.refreshTokenHash, hashVanToken(refreshToken)),
+          isNull(apparaatSessie.ingetrokkenOp),
+        ),
+      )
+      .returning({ id: apparaatSessie.id });
+    return { ingetrokken: geupdate !== undefined };
+  }
+
   async function trekSessieIn(sessieId: bigint): Promise<{ ingetrokken: boolean }> {
     const nu = klok.nu();
     const [geupdate] = await config.db
@@ -480,6 +500,7 @@ export function maakTokenService(config: TokenServiceConfig): TokenService {
     geefTokensUit,
     verfris,
     trekSessieIn,
+    trekSessieInViaToken,
     trekAlleSessiesIn,
     klok,
   };

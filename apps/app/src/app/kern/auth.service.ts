@@ -13,10 +13,44 @@ import { firstValueFrom } from 'rxjs';
 
 import { API_BASIS, TOKEN_OPSLAG } from './tokens.js';
 import { GeheugenAccessToken } from './token-opslag.js';
+import { EnkeleVerversing, metTijdslimiet } from './verversing.js';
+
+/**
+ * Hoe lang het opstarten hoogstens op het herstellen van de sessie wacht.
+ * Ruim genoeg voor een trage verbinding, kort genoeg om geen wit scherm te zijn.
+ */
+const HERSTEL_LIMIET_MS = 8000;
 
 export interface InlogAntwoord {
   readonly accessToken: string;
   readonly mfaVereist?: boolean;
+}
+
+/** Eén VvE waar deze persoon een lopende rol in heeft. */
+export interface ProfielVve {
+  readonly vveId: string;
+  readonly naam: string;
+  readonly plaats: string | null;
+  readonly status: 'actief' | 'gearchiveerd';
+  readonly boekjaarStartmaand: number;
+  readonly rol: string;
+}
+
+/**
+ * Wie is ingelogd — bepaalt welk startscherm de gebruiker krijgt.
+ *
+ * Komt van `GET /auth/mij` en niet uit het access-token: rollen in een token
+ * verouderen stil. Dit is ook géén autorisatie — de server weigert een
+ * beheerroute hoe dan ook met 403; dit stuurt alleen de navigatie, zodat
+ * niemand op een scherm belandt waar hij niets te zoeken heeft.
+ */
+export interface Profiel {
+  readonly persoonId: string;
+  readonly email: string;
+  readonly naam: string;
+  readonly isApplicatiebeheerder: boolean;
+  readonly wachtwoordWijzigenVerplicht: boolean;
+  readonly vves: readonly ProfielVve[];
 }
 
 export interface Apparaat {
@@ -33,11 +67,21 @@ export class AuthService {
   readonly #basis = inject(API_BASIS);
   readonly #opslag = inject(TOKEN_OPSLAG);
   readonly #access = new GeheugenAccessToken();
+  /**
+   * Eén poort voor álle verversingen — zowel de 401-afhandeling in de
+   * interceptor als het herstel bij opstarten. Twee paden die onafhankelijk van
+   * elkaar hetzelfde refresh-token inwisselen, zijn voor de server niet van
+   * tokendiefstal te onderscheiden: die trekt dan de hele familie in en logt de
+   * gebruiker overal uit (§7.6).
+   */
+  readonly #verversing = new EnkeleVerversing();
 
   /** `true` zodra er een bruikbaar access-token is. */
   readonly ingelogd = signal(false);
   /** `true` wanneer de server om een tweede factor vraagt. */
   readonly mfaVereist = signal(false);
+  /** Het profiel van de ingelogde gebruiker; `null` zolang het niet geladen is. */
+  readonly profiel = signal<Profiel | null>(null);
   readonly klaar = computed(() => this.ingelogd() && !this.mfaVereist());
 
   accessToken(): string | null {
@@ -109,6 +153,48 @@ export class AuthService {
     }
   }
 
+  /**
+   * Haalt het profiel op en bewaart het. Roep dit na elke inlog en na elke
+   * verversing: wie tussendoor van rol wisselt, hoort dat bij de volgende
+   * navigatie te merken en niet pas na opnieuw inloggen.
+   */
+  async laadProfiel(): Promise<Profiel> {
+    const profiel = await firstValueFrom(this.#http.get<Profiel>(`${this.#basis}/auth/mij`));
+    this.profiel.set(profiel);
+    return profiel;
+  }
+
+  /**
+   * Ververst, of sluit aan bij een verversing die al loopt. Dit is het enige
+   * pad dat de rest van de applicatie hoort te gebruiken; {@link ververs} zelf
+   * is de ongebufferde variant eronder.
+   */
+  verversEenmalig(): Promise<string | null> {
+    return this.#verversing.voerUit(() => this.ververs());
+  }
+
+  /**
+   * Herstelt de sessie bij het opstarten van de applicatie (§7.6).
+   *
+   * Het access-token staat alleen in het geheugen en is na een herlaad dus weg;
+   * het refresh-token zit in een httpOnly-cookie en overleeft wél. Zonder deze
+   * stap belandt iedereen na F5 op het inlogscherm terwijl er een geldige
+   * sessie ligt. Faalt het — geen cookie, verlopen sessie, server onbereikbaar —
+   * dan blijft de gebruiker uitgelogd en doet de routebewaking de rest.
+   */
+  async herstelSessie(): Promise<void> {
+    if (this.ingelogd()) return;
+    const token = await metTijdslimiet(this.verversEenmalig(), HERSTEL_LIMIET_MS, null);
+    if (token === null) return;
+    try {
+      await this.laadProfiel();
+    } catch {
+      // Wel een token, maar geen profiel: dan weten we niet wie dit is en
+      // hoort de gebruiker opnieuw in te loggen in plaats van half binnen te zijn.
+      this.#vergeet();
+    }
+  }
+
   apparaten(): Promise<Apparaat[]> {
     return firstValueFrom(this.#http.get<Apparaat[]>(`${this.#basis}/auth/apparaten`));
   }
@@ -117,5 +203,6 @@ export class AuthService {
     this.#access.zet(null);
     this.ingelogd.set(false);
     this.mfaVereist.set(false);
+    this.profiel.set(null);
   }
 }

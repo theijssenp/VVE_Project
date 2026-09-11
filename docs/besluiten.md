@@ -1236,3 +1236,219 @@ client dwingt dat niet zelf af.
 
 De ESLint-uitzondering op `no-extraneous-class` geldt nu ook voor `apps/app`: Angular-
 componenten hebben net als NestJS-modules een lege body met alleen decorators.
+
+---
+
+## V01 — VvE-beheer door de applicatiebeheerder
+
+### Wachtwoord wordt ingetypt, niet gemaild
+
+De spec (§3.3) laat de applicatiebeheerder een wachtwoord _genereren en mailen_, of liever nog
+een eenmalige instellink sturen. Geen van beide kan zolang SMTP hier onbruikbaar is door
+antispam-maatregelen. Daarom typt de applicatiebeheerder het wachtwoord zélf in — er staat een
+knop naast die er een uit de CSPRNG van de server laat voorstellen — en geeft hij het buiten de
+applicatie om door.
+
+Wat hierbij **niet** verandert: er wordt nog steeds nergens een wachtwoord in platte tekst
+bewaard. Alleen de argon2id-hash gaat de database in. De applicatiebeheerder kent het
+wachtwoord doordat hij het zelf koos, niet doordat het systeem het onthoudt. Een bestaand
+wachtwoord is dus ook niet op te vragen; het scherm toont een nieuw wachtwoord daarom één keer,
+met de waarschuwing erbij, en daarna nooit meer.
+
+De gemailde variant is niet weggegooid maar uitgesteld: `auth.uitnodiging_methode` uit §3.3
+blijft de plek waar dat straks aangezet wordt.
+
+### `wachtwoord_verloopt_op` blijft leeg
+
+§3.3 zet die op `now + 14 dagen`. Er is nog geen scherm om een wachtwoord te wijzigen, dus die
+datum zou een tijdbom zijn: zodra de controle erop gebouwd wordt, is elk account dat nu wordt
+aangemaakt in één klap onbruikbaar. `wachtwoord_wijzigen_verplicht` staat wél aan — dat is de
+vlag waar dat scherm straks op aanslaat, en die sluit niemand buiten.
+
+### Geen TenantGuard op deze module
+
+De `TenantGuard` eist een `vve_id` in het token. De applicatiebeheerder werkt juist over alle
+VvE's heen en heeft er zelf geen, dus zou elke route 403 geven. De afscherming is daarom
+expliciet: `SessieGuard` voor de authenticatie, plus een controle op
+`persoon.is_applicatiebeheerder` in elke handler.
+
+### Foutvorm van de API (raakt de hele applicatie)
+
+De client documenteerde `{ code, melding, referentie }`, maar de API stuurde de standaardvorm
+van Nest (`{ statusCode, error, message }`) en had helemaal geen exception filter. Daardoor
+matchte er niets en viel élke serverfout terug op de generieke tekst bij de statuscode — bij een
+fout wachtwoord uitgerekend "U bent niet (meer) ingelogd.", wat als een sessieprobleem leest.
+`HttpFoutFilter` zet dit recht: 4xx geeft de (door onszelf geschreven, bewust nietszeggende)
+tekst van de server, 5xx geeft alleen een referentie en logt de rest server-side.
+
+### Enter in een Ionic-formulier
+
+De submit-knop van een `<ion-button type="submit">` zit in de shadow DOM en telt niet mee voor
+de impliciete submit van de browser. Bij twee of meer velden deed Enter daardoor niets, terwijl
+klikken wél werkte (Ionic geeft die klik zelf door). Elk formulier krijgt nu een verborgen
+native submit-knop.
+
+### `bootstrap()` alleen bij een echt startpunt
+
+`main.ts` riep `bootstrap()` aan bij het laden van het bestand. De guard-test importeert dat
+bestand om `ALLE_CONTROLLERS` te lezen en startte daarmee een echte server, die vastliep op een
+ontbrekende `DATABASE_URL`. De aanroep staat nu achter een controle op `process.argv[1]`,
+hetzelfde patroon als in `database/seeds/beheerder.ts`.
+
+## Ontwikkelgereedschap — schema opnieuw opbouwen (11-09-2026)
+
+### Waarom naast "alleen voorwaarts" een herbouwknop staat
+
+De migratierunner weigert te draaien zodra een reeds toegepaste migratie is bewerkt (F03,
+punt 3 hierboven). Dat is de juiste regel zodra er data in staat die niemand kwijt wil,
+maar zolang het datamodel zelf nog beweegt kost elke correctie op een bestaande tabel een
+extra migratiebestand — en groeit de reeks vol met reparaties van reparaties. Daarom nu
+een tweede modus voor de ontwikkelfase: `npm run db:opnieuw --workspace @vve/api` gooit
+`public` weg en draait alle migraties opnieuw. De alleen-voorwaarts-regel blijft
+ongewijzigd; hij geldt alleen niet meer voor een database die je elke keer weggooit.
+
+Toegevoegd: `db:opnieuw` (herbouw) en `db:opnieuw:seed` (herbouw plus het
+applicatiebeheerdersaccount, wachtwoord één keer op het scherm).
+
+### De wachter kijkt naar de host, niet naar NODE_ENV
+
+Eerst overwogen: weigeren bij `NODE_ENV=production`. Dat blijkt in dit project een
+valstrik. `.env.voorbeeld` zet `NODE_ENV=production` — het sjabloon is voor de VPS
+geschreven — dus elke ontwikkelmachine die dat bestand kopieert draagt dat label zonder
+dat er iets productie-achtigs aan is. Een wachter die in de normale werkgang elke keer ten
+onrechte afgaat, leert je hem te omzeilen; dan is hij minder waard dan geen wachter.
+
+Nu is de harde grens de host uit `DATABASE_URL`: alleen `localhost`, `127.0.0.1` en `::1`.
+`NODE_ENV=production` levert nog wel een waarschuwing met de suggestie om lokaal
+`NODE_ENV=development` te zetten. Bekende ontsnapping, bewust niet afgedekt: een
+SSH-tunnel maakt een productiedatabase ook bereikbaar op 127.0.0.1.
+
+### `public` wordt teruggezet zoals PostgreSQL hem zelf aanlegt
+
+Niet `CREATE SCHEMA public` (eigenaar wordt dan de verbindende gebruiker), maar
+`AUTHORIZATION pg_database_owner` plus `GRANT USAGE ... TO PUBLIC` — de vorm die
+PostgreSQL 15+ bij een verse database gebruikt, waarin PUBLIC juist géén CREATE meer
+heeft. Anders staat de lokale database ruimer open dan een verse installatie en test je
+iets anders dan wat er in productie draait. Nagemeten: na herbouw zijn tabellen, policies
+en RLS-vlaggen identiek aan de database die via de gewone migratieweg is opgebouwd.
+
+De rollen `vve_app`/`vve_migratie`/`vve_platform` overleven de herbouw — rollen zijn
+cluster-breed, niet schema-gebonden — en migratie 0003 maakt ze aan achter een
+bestaanscontrole, dus een tweede herbouw struikelt er niet over. De extensies staan wél in
+`public` en verdwijnen mee; 0001 zet ze terug.
+
+### De runner wordt aangeroepen, niet geïmporteerd
+
+`opnieuw-opbouwen.ts` start `run-migraties.ts` als kindproces. Een directe import zou
+netter ogen, maar kan hier niet: Node's type-stripping lost een `.js`-specifier niet op
+naar het `.ts`-bestand ernaast (nagemeten op v22.23), terwijl `tsc` met NodeNext juist die
+`.js`-specifier eist — een directe import breekt dus óf de build óf het draaien vanuit
+`src`. En vanuit `src` draaien is hier het punt: dan lees je altijd de `.sql`-bestanden
+zoals ze nu op schijf staan, nooit een verouderde `dist`. Om dezelfde reden draait
+`db:opnieuw:seed` het seed-script wél uit `dist` (dat importeert de wachtwoordmodules met
+`.js`-specifiers en moet dus gecompileerd zijn) — vandaar de `npm run build` die daar al in
+zat.
+
+### `db:migrate:dist` verwijderd
+
+Dit script (F03, punt 5) draaide de runner uit `dist`, maar `tsc` kopieert de
+`.sql`-bestanden niet mee: lokaal faalde het altijd met ENOENT. In de image bestaat het
+probleem niet — `infra/api.Dockerfile` kopieert de migratiemap expliciet naar
+`dist/src/database/migraties` — en dáár luidt het advies al `node
+apps/api/dist/src/database/run-migraties.js`. Het script werkte dus alleen in de omgeving
+waar niemand het gebruikte. Weg; de Dockerfile bleef ongewijzigd.
+
+### Scripts lezen nu zelf `.env`
+
+`db:migrate`, `db:opnieuw` en `seed:beheerder` krijgen `--env-file-if-exists=../../.env`,
+zodat `DATABASE_URL` niet elke keer met de hand voor het commando hoeft. Een variabele die
+al in de omgeving staat wint van het bestand (nagemeten), dus CI en de tests houden hun
+eigen `DATABASE_URL`. `-if-exists` omdat `.env` buiten git staat en dus niet overal is.
+
+## V01 — Startscherm per rol (11-09-2026)
+
+### De fout
+
+Iedereen kwam na het inloggen op `/portaal` uit, en daar stond een knop `VvE-beheer` die
+voor alle rollen zichtbaar was. `/beheer` is het scherm waar VvE's worden opgevoerd en
+beheerderswachtwoorden worden uitgereikt — voorbehouden aan de applicatiebeheerder
+(AC1.1, AC1.3). Een VvE-beheerder belandde zo in een opvoerformulier waar hij niets mag.
+
+De API weigerde die handelingen al met 403 (`#eisApplicatiebeheerder` staat op elke
+VvE-route), dus er lekte niets. Maar een knop die voor iedereen zichtbaar is en voor bijna
+niemand werkt, is een foutmelding vermomd als functionaliteit: de gebruiker leert er alleen
+uit dat de applicatie stuk lijkt.
+
+### Rollen komen uit een endpoint, niet uit het token
+
+De client kon de rol niet weten: het access-token draagt alleen `sub`, een optionele
+`vve_id` en de MFA-markering. Nieuw endpoint `GET /api/auth/mij` met wie je bent,
+of je applicatiebeheerder bent, en de VvE's waarin je een lopende rol hebt.
+
+Bewust geen rolclaim in het token erbij. Rollen in een token zijn de rollen van het moment
+van uitgifte; een beheerder die zojuist is ontheven, zou met zijn lopende token nog een
+beheerscherm openen. Een endpoint is per definitie vers. Alleen lopende rollen tellen mee
+(`eind_datum is null`) — een beëindigde rol hoort geen startscherm op te leveren.
+
+### De keuze staat op één plek, als pure functie
+
+`startRoute()` in `apps/app/src/app/kern/start-route.ts`: applicatiebeheerder naar
+`/beheer`, wie een lopende VvE-rol heeft naar `/vve`, de rest naar `/portaal`. Geen
+Angular eromheen, want het is een regel en geen schermdetail — zo staat hij in `kern.spec.ts`
+met zes gevallen, inclusief de combinatie applicatiebeheerder-én-VvE-rol (beheer wint) en
+de beheerder van een gearchiveerde VvE (naar zijn overzicht, waar staat waarom hij niets kan).
+
+Dit stuurt alleen de navigatie en autoriseert niets. De guards `vereistApplicatiebeheerder`
+en `vereistVveRol` houden dezelfde regel aan bij directe navigatie; de 403 op de server
+blijft het vangnet. Dat is met opzet dubbel: de client beslist waar je heen gaat, de server
+beslist wat je mag.
+
+### Het overzichtscherm toont wat er is, niet wat er hoort te zijn
+
+§9 wil op het startscherm van de beheerder een actielijst: openstaande posten boven een
+drempel, ongematchte banktransacties, verlopende polissen, ALV zonder notulen. Geen van die
+gegevens bestaat nu — eenheden komen in V02, de financiële blokken daarna. `/vve` toont
+daarom de VvE zelf (naam, plaats, boekjaar, status, de eigen rol) en zegt er in één zin bij
+wat nog volgt. Liever dat dan tegels met nullen, die de indruk wekken dat er niets aan de
+hand is terwijl er niets gemeten is.
+
+### Wortelroute beslist, in plaats van vast door te sturen
+
+`''` stuurde hard door naar `portaal`. Nu hangt er een guard onder die hetzelfde
+`startRoute()` gebruikt, zodat er geen tweede plek is waar de startkeuze wordt gemaakt.
+Bij een harde herlaad komt iedereen op het inlogscherm: het access-token staat alleen in
+het geheugen (§7.6) en er is nog geen stille verversing bij het opstarten. Dat is bestaand
+F11-gedrag en niet in dit blok veranderd.
+
+### Stille verversing bij het opstarten (11-09-2026)
+
+Na een herlaad kwam iedereen op het inlogscherm terwijl er een geldige sessie lag: het
+access-token staat alleen in het geheugen (§7.6, en dat blijft zo — alles wat JavaScript
+kan lezen, kan een XSS-fout ook lezen), terwijl het refresh-token in zijn httpOnly-cookie
+de herlaad wél overleeft. Er werd alleen nooit iets met die cookie gedaan vóór de eerste
+navigatie.
+
+Nu doet `provideAppInitializer` in `main.ts` één verversronde vóórdat de router zijn eerste
+route bepaalt. Lukt het, dan haalt hij ook meteen het profiel op en komt de gebruiker terug
+op de pagina die hij herlaadde. Lukt het niet, dan blijft hij uitgelogd en klopt het
+inlogscherm.
+
+**Eén poort voor alle verversingen.** De interceptor had zijn eigen `EnkeleVerversing` als
+module-variabele. Met een tweede verversingspad erbij zouden dat twee onafhankelijke
+sloten zijn geweest, en twee sloten is geen slot: twee gelijktijdige inwisselingen van
+hetzelfde refresh-token zijn voor de server niet van diefstal te onderscheiden en kosten de
+gebruiker al zijn sessies. De poort staat daarom nu in `AuthService` (`verversEenmalig()`),
+waar beide paden langsgaan. In de browser nagemeten: een herlaad levert precies één
+`POST /auth/verversen` op.
+
+**Een tijdslimiet van 8 seconden.** Deze stap blokkeert het opstarten, dus een server die
+niet antwoordt zou een wit scherm opleveren. `metTijdslimiet` geeft het na 8 seconden op en
+levert het inlogscherm. Een antwoord dat daarna alsnog binnenkomt, richt geen schade aan:
+de rotatie is dan al door de browser verwerkt en de eerstvolgende 401 ververst gewoon
+opnieuw. Een fout telt daarbij als "niet gelukt", ook omdat een late afwijzing anders als
+unhandled rejection zou blijven liggen — daar staat een test op.
+
+**Uitloggen blijft uitloggen.** Nagemeten dat een herlaad ná uitloggen op het inlogscherm
+uitkomt: `uitloggen` wist de cookie, dus er valt niets te herstellen. Een opstartherstel dat
+een net beëindigde sessie weer tot leven wekt, zou erger zijn dan het probleem dat het
+oplost.
