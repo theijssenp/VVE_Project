@@ -22,11 +22,12 @@
  * de knop voegt niets toe.
  */
 
-import { asc, eq, sql } from 'drizzle-orm';
+import { and, asc, eq, sql } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import { Bedrag, grootsteRestVerdeler } from '@vve/domein';
 
+import { betaling, betalingKoppeling } from '../database/schema/betaling.js';
 import { bijdrageRegel, bijdrageSchema } from '../database/schema/bijdrage.js';
 import { boekjaar } from '../database/schema/boekjaar.js';
 import { eigenaarschap } from '../database/schema/eigenaarschap.js';
@@ -263,6 +264,48 @@ export function maakNotaService(config: { readonly db: NodePgDatabase }): NotaSe
           if (rij === undefined) throw new Error('nota-insert leverde geen id op');
           totaal = totaal.plus(Bedrag.vanCenten(bedrag));
           gegenereerd += 1;
+
+          // Vooruitbetaling (test #9, AC6.3): het creditsaldo van de eenheid
+          // verrekent automatisch met de verse nota. De verrekening loopt als
+          // betaling met bron 'verrekening' (§6.1) en koppeling — het
+          // expliciete boekhoudkundige spoor, hier in dezelfde transactie.
+          const [saldoRij] = await tx
+            .select({ betaald: sql<number>`COALESCE(SUM(b.bedrag_cent), 0)::int` })
+            .from(sql`betaling b`)
+            .where(sql`b.vve_id = ${vveId} AND b.wooneenheid_id = ${r.wooneenheidId}`);
+          const [gekoppeldRij] = await tx
+            .select({ gekoppeld: sql<number>`COALESCE(SUM(k.bedrag_cent), 0)::int` })
+            .from(sql`betaling_koppeling k JOIN betaling b ON b.id = k.betaling_id`)
+            .where(sql`b.vve_id = ${vveId} AND b.wooneenheid_id = ${r.wooneenheidId}`);
+          const saldo = (saldoRij?.betaald ?? 0) - (gekoppeldRij?.gekoppeld ?? 0);
+          const verrekening = Math.min(saldo, bedrag);
+          if (verrekening > 0) {
+            const [betRij] = await tx
+              .insert(betaling)
+              .values({
+                vveId,
+                wooneenheidId: r.wooneenheidId,
+                datum: invoer.factuurdatum,
+                bedragCent: verrekening,
+                bron: 'verrekening',
+                omschrijving: `Automatische verwerking creditsaldo met nota ${nummer}`,
+              })
+              .returning({ id: betaling.id });
+            if (betRij === undefined) throw new Error('verrekening-insert leverde geen id op');
+            await tx.insert(betalingKoppeling).values({
+              betalingId: betRij.id,
+              notaId: rij.id,
+              bedragCent: verrekening,
+            });
+            const nieuwOpenstaand = bedrag - verrekening;
+            await tx
+              .update(nota)
+              .set({
+                openstaandCent: nieuwOpenstaand,
+                status: nieuwOpenstaand === 0 ? 'betaald' : 'deels_betaald',
+              })
+              .where(and(eq(nota.vveId, vveId), eq(nota.id, rij.id)));
+          }
         }
         return { aantal: gegenereerd, totaalCenten: totaal.centen };
       });

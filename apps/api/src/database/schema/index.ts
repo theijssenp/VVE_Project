@@ -23,6 +23,7 @@ export {
   notaType,
   notaStatus,
   betaalwijze,
+  betalingBron,
 } from './enums.js';
 export { citext, bytea } from './types.js';
 export { vve } from './vve.js';
@@ -45,6 +46,7 @@ export { sepaMachtiging } from './sepa-machtiging.js';
 export { bijdrageSchema, bijdrageRegel } from './bijdrage.js';
 export { nota, notaRegel } from './nota.js';
 export { pdfDocument } from './pdf-document.js';
+export { betaling, betalingKoppeling } from './betaling.js';
 export type { Vve, NieuweVve } from './vve.js';
 export type { Persoon, NieuwePersoon } from './persoon.js';
 export type { RolToewijzing, NieuweRolToewijzing } from './rol-toewijzing.js';
@@ -80,3 +82,9 @@ export type {
 } from './bijdrage.js';
 export type { Nota, NieuweNota, NotaRegel, NieuweNotaRegel } from './nota.js';
 export type { PdfDocument, NieuwPdfDocument } from './pdf-document.js';
+export type {
+  Betaling,
+  NieuweBetaling,
+  BetalingKoppeling,
+  NieuweBetalingKoppeling,
+} from './betaling.js';

@@ -1806,5 +1806,34 @@ De test seedt twee eigenaren, één met 'post'.
 **Geen dubbelt op drie niveaus.** (1) `verzonden_op` op de nota bewaakt de
 serie (tweede run = 0 verzendingen, getest); (2) de F10-wachtrij-claim
 (§7.7) voorkomt dubbelt per bericht; (3) auditlog noteert elke
-serie-verzending. De PDF wordt bij verzending *vers* gebouwd en bewaard —
+serie-verzending. De PDF wordt bij verzending _vers_ gebouwd en bewaard —
 het bewijs hoort bij het verzendmoment, niet bij een oude concept-PDF.
+
+---
+
+## G08 — Betalingen (11-09-2026)
+
+**Append-only geldstroom in.** `betaling` + `betaling_koppeling` (migratie
+0021, exact §6.6); corrigeren gebeurt met een tegengestelde betaling (bron
+'verrekening'), nooit met UPDATE/DELETE. `betaling_bron` bestond al in 0001
+(§6.1-hoofdlijst) — dubbele CREATE TYPE leverde de eerste testrun 22
+rode suites op; geleerd: vóór een migratie de §6.1-enumlijst nakijken.
+
+**Openstaand_cent is afgeleid.** De nota-tabel bewaart openstaand/status,
+maar beide worden per koppeling herberekend in dezelfde transactie
+(gekoppeld-som via subquery, FOR UPDATE op de notarij in id-volgorde tegen
+deadlocks). Overkoppeling (meer koppelen dan openstaat) wordt geweigerd en
+laat de nota onveranderd — getest.
+
+**Creditsaldo (test #9) is de kern van de automatische verwerking.** De
+som van betaald-maar-niet-gekoppeld per eenheid is het creditsaldo; bij het
+*genereren* van een nieuwe nota (G06) verrekent de nota-service dat saldo
+automatisch: een betaling met bron 'verrekening' + koppeling in dezelfde
+transactie, nota-status bijgewerkt. Het saldo is live gerekend (SUM over
+betalingen − SUM over koppelingen), nooit opgeslagen — opgeslagen saldi
+raken uit de pas met append-only correcties.
+
+**Drie gevallen (AC6.3) getest:** #8 deelbetaling → deels_betaald met
+restant; volledig → betaald met 0, ook over meerdere nota's in één
+betaling; #9 vooruitbetaling → creditsaldo → automatische verwerking met de
+februari-nota (bron 'verrekening' zichtbaar in de betalingslijst).

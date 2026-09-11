@@ -75,7 +75,7 @@ Alles in deze fase werkt zónder incasso. Het betalingskenmerk op de nota is hie
 | G05 | Bijdrageschema: `uit_begroting`, `vast_bedrag` en `vierkante_meters`, splitsing exploitatie/reservefonds, oud-versus-nieuw-scherm | L | G04 | M5 · AC5.2–5.5, tests 5–7 | **klaar** |
 | G06 | Nummerreeksen met `FOR UPDATE`, nota-generatie per periode, betalingskenmerk | M | G05, G02 | M6 · AC6.1–6.2, test 10 | **klaar** |
 | G07 | Nota-PDF, verzending via de mailwachtrij, postlijst voor eenheden zonder e-mail | M | G06, F10 | M13 · AC13.4 | **klaar** |
-| G08 | Betalingen handmatig registreren, koppelen, deelbetaling en vooruitbetaling met creditsaldo | M | G06 | M6 · AC6.3, tests 8–9 | todo |
+| G08 | Betalingen handmatig registreren, koppelen, deelbetaling en vooruitbetaling met creditsaldo | M | G06 | M6 · AC6.3, tests 8–9 | **klaar** |
 | G09 | Debiteurenoverzicht met ouderdomsanalyse en debiteurendossier als PDF | M | G08 | M6 · AC6.4, AC6.8 | todo |
 | G10 | Openingsbalans en overnamewizard voor een bestaande VvE | L | G08 | §13.2 · AC5.6 | todo |
 | G11 | Aanmaningstraject in drie stappen, WIK-brief, rente en incassokosten als aparte nota | M | G09 | §5.5 · AC6.5–6.6 | todo |
@@ -180,7 +180,7 @@ AES-GCM.
 | | Aantal |
 |---|---|
 | Blokken totaal | 71 |
-| Klaar | 24 |
+| Klaar | 25 |
 | Bezig | 0 |
 
 Statuswaarden: `todo` · `bezig` · `klaar` · `overgeslagen`.
