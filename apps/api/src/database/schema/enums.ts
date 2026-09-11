@@ -81,3 +81,11 @@ export const verdeelsleutelType = pgEnum('verdeelsleutel_type', [
   'stemmen',
   'handmatig',
 ] as const);
+
+// Blok G04: status van begroting en bijdrageschema (§6.1 `begroting_status`).
+export const begrotingStatus = pgEnum('begroting_status', [
+  'concept',
+  'voorgesteld_alv',
+  'vastgesteld',
+  'gesloten',
+] as const);

@@ -14,6 +14,7 @@ export {
   boekjaarStatus,
   boekingBron,
   verdeelsleutelType,
+  begrotingStatus,
 } from './enums.js';
 export { citext, bytea } from './types.js';
 export { vve } from './vve.js';
@@ -31,6 +32,7 @@ export { grootboekrekening } from './grootboekrekening.js';
 export { boekjaar } from './boekjaar.js';
 export { boeking, boekingsregel } from './boeking.js';
 export { verdeelsleutel, verdeelsleutelRegel } from './verdeelsleutel.js';
+export { begroting, begrotingsregel } from './begroting.js';
 export type { Vve, NieuweVve } from './vve.js';
 export type { Persoon, NieuwePersoon } from './persoon.js';
 export type { RolToewijzing, NieuweRolToewijzing } from './rol-toewijzing.js';
@@ -51,3 +53,9 @@ export type {
   VerdeelsleutelRegel,
   NieuweVerdeelsleutelRegel,
 } from './verdeelsleutel.js';
+export type {
+  Begroting,
+  NieuweBegroting,
+  Begrotingsregel,
+  NieuweBegrotingsregel,
+} from './begroting.js';

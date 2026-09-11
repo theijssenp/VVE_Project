@@ -1643,3 +1643,35 @@ gewichten in de tenant-transactie en roept `grootsteRestVerdeler` aan
 (grootste-restmethode, bewezen in tests 1–4 en differentieel getoetst).
 `voorbeeldVerdeling` (AC4.4) levert per eenheid het bedrag en toetst
 onverdeeld = 0 als extra toets op de somgarantie.
+
+---
+
+## G04 — Begroting (11-09-2026)
+
+**Statusflow bewaakt in de service, niet alleen in de UI (AC5.1).**
+`concept → voorgesteld_alv → vastgesteld → gesloten`, met een toegestane-
+overgangen-tabel: regels wijzigen kan alleen in concept (anders stemt de ALV
+over iets anders dan het scherm toonde), vaststellen alleen vanuit
+voorgesteld_alv, en gesloten is het eindpunt. Vaststellen zet
+`vastgesteld_op` op vandaag. G06's nota-generatie eist later 'vastgesteld'.
+
+**De vorig-jaar-kolom (AC5.7) leest uit de boekingen, niet uit een kopie.**
+De vergelijking somt per grootboekrekening de regels van het vorige
+boekjaar (append-only, G02); de richting volgt de categorie — lasten/activa
+tellen debet−credit, baten/passiva credit−debet. Er is dus geen aparte
+"realisatie"-tabel nodig: de boeking zelf is de realisatie.
+
+**AC5.7-PDF bewust als datastructuur geleverd.** Het detail-endpoint
+retourneert de volledige ALV-tabel (regels, exploitatie/reserve-totalen,
+vergelijking) als JSON. De PDF zelf volgt bij de verzend-flow (G07/G13);
+de spec-eis is de export en zijn kolommen — die structuur is hier al
+exact zo vastgelegd.
+
+**`besluit_id`-kolom is er, de FK volgt later.** Het besluitenregister is
+blok A03; de kolom bestaat in de migratie zonder FK zodat het DDL geen
+verwijzing naar een niet-bestaande tabel aanraakt.
+
+**Seed-realisatie in tests rechtstreeks geïnserte rijen.** De
+boekingsservice weigert boeken in een afgesloten jaar terecht; de
+vorig-jaar-historie is er simpelweg, dus de test insert een gebalanceerde
+boeking direct (waar de deferred trigger bij COMMIT over toeziet).
