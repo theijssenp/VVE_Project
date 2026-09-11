@@ -1604,7 +1604,42 @@ definieert zijn eigen `Klok`-vorm bewust verder — die dubbele definitie is
 de volgorde van de migraties naar één definitie, maar G02 begon met de
 referentie.
 
-**Boekingsnummering: `2026-000001`, per jaar oplopend via count(*).** De
+**Boekingsnummering: `2026-000001`, per jaar oplopend via count(\*).** De
 UNIQUE (vve_id, nummer) vangt gelijktijdigheid af: bij een race slaagt er
 één en faalt de andere hoorbaar. Voor de nota-generatie (G06) met batchen
 komt dan een echte `FOR UPDATE`-nummerreeks — zie de spec-regel voor G06.
+
+---
+
+## G03 — Verdeelsleutels (11-09-2026)
+
+**Gewichten van de afgeleide typen worden niet opgeslagen, maar live gerekend.**
+Bij `breukdeel` is het gewicht de teller van de eenheid, bij `vierkante_meters`
+de oppervlakte, bij `gelijke_delen` 1, bij `stemmen` het aantal stemmen —
+uit de eenhedentabel op het moment van verdeling. Alleen `handmatig` slaat
+gewichten op in `verdeelsleutel_regel` (AC4.2). Reden: opgeslagen kopieën van
+tellers en m² raken vanzelf uit de pas met de eenhedenlijst; live lezen is
+altijd actueel en de verdeling is reproduceerbaar (de §5.2-verdeler sorteert
+op eenheid-id, niet op invoegvolgorde).
+
+**Uitsluiting (AC4.2) per type.** Handmatig: regel met gewicht 0. De
+afgeleide typen sluiten impliciet uit: een eenheid zonder teller/m²/stemmen
+(0 of NULL) doet niet mee en het totaal wordt over het restant verdeeld.
+Een uitsluitingslijst als aparte tabel is bewust niet gebouwd — de gewicht-0
+route dekt de use-case met één mechanisme.
+
+**Historisering (AC4.5) met id-stabiliteit.** `nieuweVersie` maakt een nieuwe
+rij met versie+1 (op de naam gezocht, zodat meerdere versies van één sleutel
+oplopen) en kopieert de regels als de aanroeper ze niet zelf opgeeft; de
+oude rij gaat op `actief = false` en blijft met zijn regels bereikbaar.
+Nota's die naar de oude id verwijzen (G06) blijven bewust op de oude versie.
+
+**De `grootboekrekening.verdeelsleutel_id`-FK uit §6.7 is gelegd** in
+migratie 0015 — G01 had hem overgelaten omdat de FK-target-tabel nog niet
+bestond. Optioneel: een rekening kan zónder default-sleutel.
+
+**Verdeling zelf is de F05-kern, niet dubbel gebouwd.** De service leest de
+gewichten in de tenant-transactie en roept `grootsteRestVerdeler` aan
+(grootste-restmethode, bewezen in tests 1–4 en differentieel getoetst).
+`voorbeeldVerdeling` (AC4.4) levert per eenheid het bedrag en toetst
+onverdeeld = 0 als extra toets op de somgarantie.

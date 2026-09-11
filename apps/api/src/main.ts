@@ -11,6 +11,7 @@ import { AuthController } from './modules/auth/auth.controller.js';
 import { EenhedenController } from './modules/eenheden/eenheden.controller.js';
 import { FinancieelController } from './financieel/financieel.controller.js';
 import { UitnodigingenController } from './modules/uitnodigingen/uitnodigingen.controller.js';
+import { VerdeelsleutelController } from './financieel/verdeelsleutel.controller.js';
 import { VveController } from './modules/vve/vve.controller.js';
 import { controleerRouteDeclaraties } from './gemeenschappelijk/auth/route-inventaris.js';
 
@@ -31,6 +32,7 @@ export const ALLE_CONTROLLERS = [
   EenhedenController,
   UitnodigingenController,
   FinancieelController,
+  VerdeelsleutelController,
 ];
 
 export async function bootstrap(): Promise<void> {

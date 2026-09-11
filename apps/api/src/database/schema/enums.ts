@@ -72,3 +72,12 @@ export const boekingBron = pgEnum('boeking_bron', [
   'openingsbalans',
   'jaarafsluiting',
 ] as const);
+
+// Blok G03: typen verdeelsleutels (spec §6.1 `verdeelsleutel_type`, M4).
+export const verdeelsleutelType = pgEnum('verdeelsleutel_type', [
+  'breukdeel',
+  'vierkante_meters',
+  'gelijke_delen',
+  'stemmen',
+  'handmatig',
+] as const);

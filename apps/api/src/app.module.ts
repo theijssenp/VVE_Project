@@ -4,6 +4,7 @@ import { Module } from '@nestjs/common';
 import { DatabaseModule } from './database/database.module.js';
 import { FinancieelModule } from './financieel/financieel.module.js';
 import { GrootboekModule } from './financieel/grootboek.module.js';
+import { VerdeelsleutelModule } from './financieel/verdeelsleutel.module.js';
 import { AuthModule } from './modules/auth/auth.module.js';
 import { EenhedenModule } from './modules/eenheden/eenheden.module.js';
 import { HealthModule } from './modules/health/health.module.js';
@@ -20,6 +21,7 @@ import { VveModule } from './modules/vve/vve.module.js';
     UitnodigingenModule,
     GrootboekModule,
     FinancieelModule,
+    VerdeelsleutelModule,
   ],
 })
 export class AppModule {}
