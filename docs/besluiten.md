@@ -1494,3 +1494,42 @@ worden tegengehouden.
 scherm koppelt per aanmaak precies één eigenaar (de beheerder zelf, AC2.1).
 Meerdere eigenaren, aandelen 50/50 en de eigenaarswissel met
 verrekenoverzicht zijn blok V03; V04 voegt de uitnodigingsflow toe (AC2.2).
+
+---
+
+## V04 — Uitnodigingen (11-09-2026)
+
+**De registratielink wint van het gemailde wachtwoord (§3.3-aanbevolen
+variant).** Per nieuw adres ontstaat een rij in `uitnodiging` (migratie 0012,
+exact de spec-tabel) met een opak token: 32 bytes CSPRNG, alleen de sha256-hex
+in de database — het patroon van `refresh_token_hash`. De mail met de link is
+`gevoelig` (F10): de tekst met de link wordt na verzending gewist, de regel
+blijft als verzendbewijs. In de tests bewezen met de echte wachtrij.
+
+**Bestaand persoon → geen token.** Is het adres al persoon (eigenaar in een
+andere VvE), dan wordt hij in de tenant-transactie direct gekoppeld als
+eigenaar en ontvangt alleen de "u bent toegevoegd aan VvE X"-mail (§3.3 stap
+2). Geen registratie-omweg voor iemand die al een account heeft.
+
+**Registratie staat buiten de tenant-guards — bewust.** Wie registreert heeft
+nog geen account; het ééndegligige opake token ís de autorisatie. De
+service consumeert het token in dezelfde transactie als de accountaanmaak
+(gebruikt_op + wachtwoord-hash + rol_toewijzing + eigenaarschap), zodat een
+dubbelaangeboden token de tweede keer hard faalt. Het registratie-endpoint
+verkondigt onbekend/verlopen/gebruikt met één uniforme melding.
+
+**Het ruwe token gaat niet naar de beheerder.** Het antwoord van de
+uitnodiging-endpoints noemt alleen status en id; het token verlaat de service
+uitsluitend richting mailwachtrij. De beheerder hoeft het nooit te zien — de
+link hoort in de mailbox van de ontvanger, nergens anders.
+
+**SMTP is nog een stub.** De verzender schrijft één logregel; de wachtrij,
+backoff en het gevoelig-wissen zijn al het echte F10-pad. Bij de livegang
+wordt alleen de verzender vervangen — de service en de wachtrij veranderen
+niet. Tests injecteren een eigen verzender.
+
+**Wat op V03 wacht.** De eerste koppeling zet `is_primair_contact` en
+`aandeel_promille = 1000`; meerdere eigenaren per eenheid, aandeelverdeling
+(50/50) en de eigenaarswissel met verrekenoverzicht zijn V03. Bewoner-
+uitnodigingen (rol `bewoner`, AC2.6) maken de rij en het token al, maar de
+bewonersrechten volgen in een later blok.

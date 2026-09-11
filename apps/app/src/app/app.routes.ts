@@ -21,6 +21,12 @@ export const routes: Routes = [
     loadComponent: () => import('./inloggen/mfa.page.js').then((m) => m.MfaPage),
   },
   {
+    // Registratie via de uitnodigingslink (V04): publiek, het token in de
+    // query is de autorisatie; er is nog geen sessie.
+    path: 'registratie',
+    loadComponent: () => import('./registratie/registratie.page.js').then((m) => m.RegistratiePage),
+  },
+  {
     path: 'portaal',
     canActivate: [vereistSessie],
     loadComponent: () => import('./portaal/portaal.page.js').then((m) => m.PortaalPage),

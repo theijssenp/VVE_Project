@@ -9,6 +9,7 @@ import { HttpFoutFilter } from './gemeenschappelijk/http-fout.filter.js';
 import { HealthController } from './modules/health/health.controller.js';
 import { AuthController } from './modules/auth/auth.controller.js';
 import { EenhedenController } from './modules/eenheden/eenheden.controller.js';
+import { UitnodigingenController } from './modules/uitnodigingen/uitnodigingen.controller.js';
 import { VveController } from './modules/vve/vve.controller.js';
 import { controleerRouteDeclaraties } from './gemeenschappelijk/auth/route-inventaris.js';
 
@@ -27,6 +28,7 @@ export const ALLE_CONTROLLERS = [
   AuthController,
   VveController,
   EenhedenController,
+  UitnodigingenController,
 ];
 
 export async function bootstrap(): Promise<void> {
