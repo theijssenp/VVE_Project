@@ -68,7 +68,7 @@ Alles in deze fase werkt zónder incasso. Het betalingskenmerk op de nota is hie
 
 | ID | Blok | Omvang | Na | Spec | Status |
 |---|---|---|---|---|---|
-| G01 | Standaard grootboekschema als seed, rekeningbeheer per VvE | S | V01 | §5.7 · AC9.1 | todo |
+| G01 | Standaard grootboekschema als seed, rekeningbeheer per VvE | S | V01 | §5.7 · AC9.1 | **klaar** |
 | G02 | Boekjaar, boekingsservice, deferred constraint trigger, append-only rechten | M | G01 | §6.7, §7.4 · tests 20–21 | todo |
 | G03 | Verdeelsleutels: vijf typen, uitsluitingen, voorbeeldberekening, versiebeheer | M | V02, F05 | M4 · AC4.1–4.5 | todo |
 | G04 | Begroting: regels, statusflow, vergelijking met vorig jaar, PDF voor de ALV | M | G03 | M5 · AC5.1, AC5.7 | todo |
@@ -180,7 +180,7 @@ AES-GCM.
 | | Aantal |
 |---|---|
 | Blokken totaal | 71 |
-| Klaar | 16 |
+| Klaar | 17 |
 | Bezig | 0 |
 
 Statuswaarden: `todo` · `bezig` · `klaar` · `overgeslagen`.

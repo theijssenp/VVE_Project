@@ -27,9 +27,11 @@ import { persoon } from '../../database/schema/persoon.js';
 import { rolToewijzing } from '../../database/schema/rol-toewijzing.js';
 import { vve } from '../../database/schema/vve.js';
 import { wooneenheid } from '../../database/schema/wooneenheid.js';
+import { grootboekrekening } from '../../database/schema/grootboekrekening.js';
 import { maakAuditService } from '../../gemeenschappelijk/audit/audit-service.js';
 import { beoordeelWachtwoord, hashWachtwoord } from '../../gemeenschappelijk/auth/wachtwoord.js';
 import type { Klok } from '../../gemeenschappelijk/system-klok.js';
+import { standaardGrootboekschema } from '../../financieel/grootboek-schema.js';
 
 /** Modelreglementen uit §6.1; los meegetypt zodat de client ze kan tonen. */
 export const MODELREGLEMENTEN = [
@@ -291,6 +293,19 @@ export function maakVveService(config: VveServiceConfig): VveService {
         if (rij === undefined) throw new Error('VvE aanmaken leverde geen id op.');
         const persoonId = await persoonKlaarzetten(tx, beheerder);
         await beheerderRolZetten(tx, rij.id, persoonId);
+        // AC9.1: het standaard grootboekschema (§5.7) hoort bij de VvE vanaf
+        // het eerste moment, in hetzelfde atomare aanmaakmoment. De kopie
+        // loopt binnen deze transactie; RLS is hier geen deur maar een
+        // aanmaakcontext (de VvE-rij is net in deze transactie geboren).
+        await tx.insert(grootboekrekening).values(
+          standaardGrootboekschema(rij.id).map((r) => ({
+            vveId: rij.id,
+            nummer: r.nummer,
+            naam: r.naam,
+            categorie: r.categorie,
+            isReservefonds: r.isReservefonds,
+          })),
+        );
         return { vveId: rij.id, persoonId };
       });
     },

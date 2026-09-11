@@ -1533,3 +1533,32 @@ niet. Tests injecteren een eigen verzender.
 (50/50) en de eigenaarswissel met verrekenoverzicht zijn V03. Bewoner-
 uitnodigingen (rol `bewoner`, AC2.6) maken de rij en het token al, maar de
 bewonersrechten volgen in een later blok.
+
+---
+
+## G01 — Grootboekrekeningen (11-09-2026)
+
+**Het §5.7-schema is 37 rekeningen, exact geteld: 11 balans (3 eigen vermogen,
+5 activa, 3 passiva) + 20 lasten + 6 baten.** De dotatie-paring `4950`
+(dotatie reservefonds, last) en `8150` (voorschotbijdragen reservefonds, baten)
+zitten erin, met `is_reservefonds = true` op `0600` (balans) en `1150`
+(bankreserve) — de twee vlaggen waar de saldocontrole van §5.4 straks op
+aangrijpt. De test bewaakt de telling per categorie, zodat een latere
+wijziging van het schema niet stil kan inslippen.
+
+**Bij het aanmaken van een VvE zit de kopie in dezelfde transactie (AC9.1).**
+De vve-service stopt de 37 rekeningen in hetzelfde atomare aanmaakmoment —
+een VvE bestaat vanaf geboorte mét zijn rekeningplan. De aparte
+`kopieerStandaardSchema`-service is er voor bestaande VvE's (idempotent:
+nummers die er al staan worden overgeslagen), bv. bij het bijwerken van het
+standaardschema zelf.
+
+**Verwijderen is geen operatie.** Rekeningen deactiveren kan, verwijderen
+niet: G02's append-only boekingen hangen straks aan deze id's en de nummers
+zijn het anker van het auditverleden. De kolom `verdeelsleutel_id` uit §6.7
+komt mee in de migratie van G03 (de FK-target-tabel bestaat nog niet).
+
+**Kolom `aangemaakt_op` bewust weggehaald bij deze tabel.** De spec-tabel
+heeft hem niet (alleen de algemene §6-conventie noemt hem); het DDL van de
+migratie is leidend en het Drizzle-schema volgt exact — anders valt elke
+insert over een kolom die niet bestaat.

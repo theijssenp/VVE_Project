@@ -49,3 +49,12 @@ export const eenheidType = pgEnum('eenheid_type', [
   'bedrijfsruimte',
   'gemeenschappelijk',
 ] as const);
+
+// Blok G01: categorieën van het grootboek (spec §6.1 `grootboek_categorie`).
+export const grootboekCategorie = pgEnum('grootboek_categorie', [
+  'activa',
+  'passiva',
+  'eigen_vermogen',
+  'lasten',
+  'baten',
+] as const);
