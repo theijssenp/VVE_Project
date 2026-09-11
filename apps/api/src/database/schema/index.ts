@@ -20,6 +20,9 @@ export {
   bijdrageMethode,
   periodiciteit,
   bijdrageBron,
+  notaType,
+  notaStatus,
+  betaalwijze,
 } from './enums.js';
 export { citext, bytea } from './types.js';
 export { vve } from './vve.js';
@@ -40,6 +43,7 @@ export { verdeelsleutel, verdeelsleutelRegel } from './verdeelsleutel.js';
 export { begroting, begrotingsregel } from './begroting.js';
 export { sepaMachtiging } from './sepa-machtiging.js';
 export { bijdrageSchema, bijdrageRegel } from './bijdrage.js';
+export { nota, notaRegel } from './nota.js';
 export type { Vve, NieuweVve } from './vve.js';
 export type { Persoon, NieuwePersoon } from './persoon.js';
 export type { RolToewijzing, NieuweRolToewijzing } from './rol-toewijzing.js';
@@ -73,3 +77,4 @@ export type {
   BijdrageRegel,
   NieuwBijdrageRegel,
 } from './bijdrage.js';
+export type { Nota, NieuweNota, NotaRegel, NieuweNotaRegel } from './nota.js';

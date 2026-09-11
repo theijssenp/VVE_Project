@@ -1722,7 +1722,7 @@ m² × m²), via dezelfde verdeler met m² als gewicht. `vast_bedrag` neemt
 handmatige periodebedragen en leidt het jaarbedrag daaruit af.
 
 **De periodeverdeling is bewust bij G06.** Het schema bewaart het
-*jaarbedrag* per eenheid; de tweede verdeling van §5.3 (jaarbedrag → N
+_jaarbedrag_ per eenheid; de tweede verdeling van §5.3 (jaarbedrag → N
 perioden, grootste-rest, centen in de eerste maanden) gebeurt bij de
 nota-generatie, waar de periodiciteit en de ingangsdatum van de periode
 bekend zijn. Hier is dat een keuze met een reden: het schema kan vóór
@@ -1743,3 +1743,38 @@ Nota's (G06) verlaten op datzelfde principe op bedragniveau.
 **Statusflow en bewaking.** Het schema deelt de begrotings-status-enum;
 herberekenen en vaste bedragen wijzigen kan alleen in `concept`. De status-
 schuif volgt in G06 samen met de nota-generatie, die 'vastgesteld' eist.
+
+---
+
+## G06 — Nota-generatie (11-09-2026)
+
+**Nummerreeks met FOR UPDATE op de boekjaar-rij (test #10).** Eerste poging
+zette `FOR UPDATE` op de count-over-nota — Postgres weigert dat (0A000,
+CheckSelectLocking). De lock staat nu op de moeder-rij: alle gelijktijdige
+generaties voor één boekjaar serialiseren op die rijvergrendeling, daarna is
+de telling stabiel. `UNIQUE (vve_id, nummer)` vangt hard af wat er nog
+doorheen glipt. Getest met 15 gelijktijdige generaties: exact 2 nota's,
+nummers 0001/0002, geen dubbele.
+
+**Idempotentie ná de vergrendeling.** De periode-toets (zelfde type/boekjaar/
+van/tot → 0 nota's) moet ná de `FOR UPDATE` lezen, niet ervoor — anders
+lopen parallelle generaties er allebei doorheen vóór de eerste COMMIT en
+ontstaan alsnog dubbele periode-nota's. Deze volgorde is de kern van test
+#10, niet de nummering zelf.
+
+**Tweede verdeling van §5.3 op de juiste plek.** Het bijdrageschema bewaart
+jaarbedragen; de nota-verdeling verdeelt het *componentgewijs* — exploitatie
+en reserve elk apart over N perioden met de grootste-restmethode. Daardoor
+krijgt index 0 in elk component het restcent (16.667+16.667+8.334+8.334 +
+4×8.334 = 83.338 bij de test-inkomst). Verwachtingen in de test zijn tegen
+een exacte referentie nagerekend (Python-referentie in de sessie).
+
+**Betalingskenmerk (AC6.2).** `NOTA{nummer}` op elke nota; `UNIQUE (vve_id,
+betalingskenmerk)` afgedwongen. Het afletteren zelf (B05, AC7.4-stap 1)
+zoekt dit kenmerk in de bankomschrijving; de nota-dienst geeft de
+betalingswijze default 'overboeking', incasso (AC8.3) zet 'incasso' in M8.
+
+**Restcent-berekening is bewust per component.** Het restcent van de
+exploitatieverdeling en dat van de reserve verhouden zich tot hun eigen
+totalen, niet tot de combinatie — dit sluit aan bij de aparte §5.3-
+verdelingen van G05 en houdt de exploitatie/reserve-splitsing exact.

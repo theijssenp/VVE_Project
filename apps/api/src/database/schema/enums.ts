@@ -107,3 +107,23 @@ export const bijdrageMethode = pgEnum('bijdrage_methode', [
 ] as const);
 export const periodiciteit = pgEnum('periodiciteit', ['maand', 'kwartaal', 'jaar'] as const);
 export const bijdrageBron = pgEnum('bijdrage_bron', ['berekend', 'handmatig'] as const);
+
+// Blok G06: nota's (§6.1 `nota_type`, `nota_status`, `betaalwijze`).
+export const notaType = pgEnum('nota_type', [
+  'periodieke_bijdrage',
+  'afrekening',
+  'eenmalige_heffing',
+  'boete',
+  'rente',
+  'incassokosten',
+  'credit',
+] as const);
+export const notaStatus = pgEnum('nota_status', [
+  'concept',
+  'open',
+  'deels_betaald',
+  'betaald',
+  'gecrediteerd',
+  'oninbaar',
+] as const);
+export const betaalwijze = pgEnum('betaalwijze', ['incasso', 'overboeking'] as const);
