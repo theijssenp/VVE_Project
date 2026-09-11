@@ -1562,3 +1562,49 @@ komt mee in de migratie van G03 (de FK-target-tabel bestaat nog niet).
 heeft hem niet (alleen de algemene §6-conventie noemt hem); het DDL van de
 migratie is leidend en het Drizzle-schema volgt exact — anders valt elke
 insert over een kolom die niet bestaat.
+
+---
+
+## G02 — Boekjaar en boekingsservice (11-09-2026)
+
+**Twee vangnetten op de balanseis, zoals §7.4 voorschrijft ("beide moeten
+bestaan").** Vangnet 1: de boekingsservice weegt debet/credit vóór het
+schrijven en gooit `OnbalansFout`. Vangnet 2: migratie 0014 zet een
+`CONSTRAINT TRIGGER ... DEFERRABLE INITIALLY DEFERRED` op `boeking` die bij
+COMMIT per boeking `sum(debet) = sum(credit)` controleert — het vangnet voor
+de directe-insert-omweg. In de test bewezen: een ongebalanceerde rechtstreekse
+insert slaagt totdat de transactie commit, en faalt dan hard. (Bij een
+vacuüm-boeking zónder regels is 0 = 0 en slaagt de trigger terecht; de
+test insert daarom een boeking mét een enkelvoudige debetregel.)
+
+**Append-only via REVOKE, niet via RULE.** Migratie 0014 ontneemt vve_app
+UPDATE/DELETE op `boeking` en `boekingsregel`. Een `CREATE RULE ... DO
+INSTEAD NOTHING` zou de UPDATE stilzwijgend laten slagen (slecht: de caller
+denkt dat het gelukt is); de REVOKE laat hem hoorbaar falen. De
+vergrendelings-UPDATE van AC9.3 (`boeking.vergrendeld`) wacht op de
+expliciet gerechtigde routine van B10 — de status 'afgesloten' blokkeert
+via de boekingsservice al elke nieuwe boeking.
+
+**Foutklassen éénmalig gedefinieerd.** `boekjaar-service.ts` hergebruikt
+`InvoerFout`/`NietGevondenFout` uit `boekhouding.ts` in plaats van een
+eigen kopie: twee klassen met dezelfde naam zijn voor `instanceof` twee
+verschillende dingen, en de controller (én de tests) toetsen over beide
+services heen.
+
+**RLS op `boekingsregel` via EXISTS op de moeder-boeking.** De regeltabel
+heeft geen eigen `vve_id` in de spec; de policy volgt de koppeling
+(`boekingsregel.boeking_id → boeking.vve_id = app.vve_id`). Kosten: één
+subquery per rijcheck; winst: het patroon van §6.9 blijft letterlijk.
+
+**`@vve/domein` is nu een echte projectreferentie van `apps/api`.** F01
+hield het domeinpakket bewust buiten de referentielijst zolang niemand hem
+aanklaste; de boekingsservice is de eerste echte gebruiker (`Bedrag` in
+centen, met de ESLint-wachters van F05/F12 op de velden). `SystemKlok`
+definieert zijn eigen `Klok`-vorm bewust verder — die dubbele definitie is
+de volgorde van de migraties naar één definitie, maar G02 begon met de
+referentie.
+
+**Boekingsnummering: `2026-000001`, per jaar oplopend via count(*).** De
+UNIQUE (vve_id, nummer) vangt gelijktijdigheid af: bij een race slaagt er
+één en faalt de andere hoorbaar. Voor de nota-generatie (G06) met batchen
+komt dan een echte `FOR UPDATE`-nummerreeks — zie de spec-regel voor G06.

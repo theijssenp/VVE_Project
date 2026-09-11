@@ -18,6 +18,9 @@
   "references": [
     {
       "path": "../../packages/contract"
+    },
+    {
+      "path": "../../packages/domein"
     }
   ]
 }

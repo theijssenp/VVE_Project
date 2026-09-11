@@ -58,3 +58,17 @@ export const grootboekCategorie = pgEnum('grootboek_categorie', [
   'lasten',
   'baten',
 ] as const);
+
+// Blok G02: status van het boekjaar (spec §6.1 `boekjaar_status`).
+export const boekjaarStatus = pgEnum('boekjaar_status', ['concept', 'open', 'afgesloten'] as const);
+
+// Blok G02: bron van een boeking (spec §6.1 `boeking_bron`).
+export const boekingBron = pgEnum('boeking_bron', [
+  'nota',
+  'betaling',
+  'bank',
+  'incasso',
+  'memoriaal',
+  'openingsbalans',
+  'jaarafsluiting',
+] as const);

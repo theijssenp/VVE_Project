@@ -11,6 +11,8 @@ export {
   rolType,
   eenheidType,
   grootboekCategorie,
+  boekjaarStatus,
+  boekingBron,
 } from './enums.js';
 export { citext, bytea } from './types.js';
 export { vve } from './vve.js';
@@ -25,6 +27,8 @@ export { wooneenheid } from './wooneenheid.js';
 export { eigenaarschap } from './eigenaarschap.js';
 export { uitnodiging } from './uitnodiging.js';
 export { grootboekrekening } from './grootboekrekening.js';
+export { boekjaar } from './boekjaar.js';
+export { boeking, boekingsregel } from './boeking.js';
 export type { Vve, NieuweVve } from './vve.js';
 export type { Persoon, NieuwePersoon } from './persoon.js';
 export type { RolToewijzing, NieuweRolToewijzing } from './rol-toewijzing.js';
@@ -37,3 +41,5 @@ export type { Wooneenheid, NieuweWooneenheid } from './wooneenheid.js';
 export type { Eigenaarschap, NieuwEigenaarschap } from './eigenaarschap.js';
 export type { Uitnodiging, NieuweUitnodiging } from './uitnodiging.js';
 export type { Grootboekrekening, NieuweGrootboekrekening } from './grootboekrekening.js';
+export type { Boekjaar, NieuwBoekjaar } from './boekjaar.js';
+export type { Boeking, NieuweBoeking, Boekingsregel, NieuweBoekingsregel } from './boeking.js';
