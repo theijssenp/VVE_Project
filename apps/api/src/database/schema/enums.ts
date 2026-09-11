@@ -98,3 +98,12 @@ export const machtigingStatus = pgEnum('machtiging_status', [
   'ingetrokken',
   'verlopen',
 ] as const);
+
+// Blok G05: bijdragemethoden en periodiciteit (§6.1, M5).
+export const bijdrageMethode = pgEnum('bijdrage_methode', [
+  'uit_begroting',
+  'vast_bedrag',
+  'vierkante_meters',
+] as const);
+export const periodiciteit = pgEnum('periodiciteit', ['maand', 'kwartaal', 'jaar'] as const);
+export const bijdrageBron = pgEnum('bijdrage_bron', ['berekend', 'handmatig'] as const);

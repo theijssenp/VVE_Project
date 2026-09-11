@@ -1709,3 +1709,37 @@ klaar voor I01/I06. Gebruikers van de kolommen gaan door de module:
 `beveiligIban` vult, `ontsleutelIban` leest, niemand raakt de bytea's
 rechtstreeks. Index op `iban_hmac` bewijst in de test dat een zoekactie de
 rij vindt zonder te ontsleutelen.
+
+---
+
+## G05 — Bijdrageschema (11-09-2026)
+
+**Drie methoden, één uitkomstvorm (§5.3).** `uit_begroting` verdeelt elke
+begrotingsregel via de G03-sleutel (gewichten live, §5.2-verdeler) en houdt
+exploitatie en reserve apart over de `is_reservefonds`-vlag van de regel.
+`vierkante_meters` is factelijk methode 1 met één regel (totaal ÷ totaal
+m² × m²), via dezelfde verdeler met m² als gewicht. `vast_bedrag` neemt
+handmatige periodebedragen en leidt het jaarbedrag daaruit af.
+
+**De periodeverdeling is bewust bij G06.** Het schema bewaart het
+*jaarbedrag* per eenheid; de tweede verdeling van §5.3 (jaarbedrag → N
+perioden, grootste-rest, centen in de eerste maanden) gebeurt bij de
+nota-generatie, waar de periodiciteit en de ingangsdatum van de periode
+bekend zijn. Hier is dat een keuze met een reden: het schema kan vóór
+vaststelling herberekend worden (proefverdeling op het scherm, AC5.3) —
+periodedelen opslaan zou die proef telkens herschrijven terwijl G06 de
+verdeling deterministisch zelf aanbrengt bij elke nota.
+
+**Dekkingsanalyse (AC5.2) via het Bedrag-waardetype.** De F12-wachter
+verbiedt ruwe centenrekenkunde; het dekkingsverschil rekent met
+`Bedrag.min`. Positief verschil = dekkingstekort (de "dekkingstekort €
+1.240"-tekst uit de spec is hier de centwaarde), negatief = overschot.
+
+**Test #7-kern bewezen op schemaniveau.** Een drastisch gewijzigde
+breukdeelteller verandert de opgeslagen regels van het schema niet: de
+regels zijn het bewijs van de berekening op het moment van herbereken.
+Nota's (G06) verlaten op datzelfde principe op bedragniveau.
+
+**Statusflow en bewaking.** Het schema deelt de begrotings-status-enum;
+herberekenen en vaste bedragen wijzigen kan alleen in `concept`. De status-
+schuif volgt in G06 samen met de nota-generatie, die 'vastgesteld' eist.

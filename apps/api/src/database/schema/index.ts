@@ -17,6 +17,9 @@ export {
   begrotingStatus,
   machtigingType,
   machtigingStatus,
+  bijdrageMethode,
+  periodiciteit,
+  bijdrageBron,
 } from './enums.js';
 export { citext, bytea } from './types.js';
 export { vve } from './vve.js';
@@ -36,6 +39,7 @@ export { boeking, boekingsregel } from './boeking.js';
 export { verdeelsleutel, verdeelsleutelRegel } from './verdeelsleutel.js';
 export { begroting, begrotingsregel } from './begroting.js';
 export { sepaMachtiging } from './sepa-machtiging.js';
+export { bijdrageSchema, bijdrageRegel } from './bijdrage.js';
 export type { Vve, NieuweVve } from './vve.js';
 export type { Persoon, NieuwePersoon } from './persoon.js';
 export type { RolToewijzing, NieuweRolToewijzing } from './rol-toewijzing.js';
@@ -63,3 +67,9 @@ export type {
   NieuweBegrotingsregel,
 } from './begroting.js';
 export type { SepaMachtiging, NieuweSepaMachtiging } from './sepa-machtiging.js';
+export type {
+  BijdrageSchema,
+  NieuwBijdrageSchema,
+  BijdrageRegel,
+  NieuwBijdrageRegel,
+} from './bijdrage.js';

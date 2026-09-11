@@ -101,7 +101,7 @@ export interface VerdeelsleutelService {
 }
 
 /** Zoekt de gewichten van de sleutel op het moment van verdeling. */
-async function gewichten(
+export async function gewichten(
   tx: Parameters<Parameters<NodePgDatabase['transaction']>[0]>[0],
   vveId: bigint,
   sleutelId: bigint,
