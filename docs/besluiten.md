@@ -1452,3 +1452,45 @@ unhandled rejection zou blijven liggen — daar staat een test op.
 uitkomt: `uitloggen` wist de cookie, dus er valt niets te herstellen. Een opstartherstel dat
 een net beëindigde sessie weer tot leven wekt, zou erger zijn dan het probleem dat het
 oplost.
+
+---
+
+## V02 — Wooneenheden (11-09-2026)
+
+**Eerste tenant-scoped blok: de F08-guards zijn nu bedraad.** V02 maakte de
+eerste routes waarop de volledige §7.5-keten (SessieGuard → TenantSessieGuard →
+RolSessieGuard) staat. Eerder blokkeerde die keten alleen op papier: de
+`TenantGuard` eist een `vve_id`-claim in het access-token, maar
+`tekenAccessToken` zette er nooit één. Dat is nu geplugged:
+
+**De actieve VvE woont op de sessie-rij (migratie 0011).** Kolom
+`apparaat_sessie.actieve_vve_id`, gezet via het nieuwe
+`POST /auth/actieve-vve`. De service controleert daar een lopende
+`rol_toewijzing` tegen de database van het moment — de keuze van de tenant is
+geen client-meningsuiting (§7.5 stap 2). Het antwoord is een vers access-token
+mét claim; het refresh-token verandert niet, en elke rotatie erft de claim van
+de sessie-rij, zodat de tenant overleeft. De client kiest de VvE via
+`AuthService.kiesActieveVve` (voorlopig de eerste uit het profiel; een echte
+VvE-wissel in de UI volgt later).
+
+**`wooneenheid.gebouw_id` verwijst alleen naar gebouw(id), zoals de
+spec-letter.** Dat het gebouw bij dezelfde VvE hoort als zijn eenheden, is niet
+met een gewone FK te bewaken — een FK omzeilt RLS. De service zoekt of maakt
+het gebouw daarom binnen de tenant-transactie, waar RLS al bewijst dat de
+gevonden rij bij deze tenant hoort.
+
+**EXCLUDE-constraints vragen `btree_gist`.** Migratie 0010 maakt de extensie
+aan vóór de gist-constraints (`geen_dubbel_volledig_eigendom`, geen overlap per
+eenheid+persoon, geen lege periode). Zonder de extensie faalt het DDL met
+"no default operator class for access method gist".
+
+**AC2.3 is een waarschuwing, geen blokkade.** De lijst retourneert
+`somTeller`, `noemer` en `verschil`; de client toont het verschil in geel en
+werkt gewoon door. Een VvE die nog niet alle eenheden heeft ingevoerd mag niet
+worden tegengehouden.
+
+**Eén eigenaar per eenheid voorlopig.** `eigenaarschap` heeft al
+`aandeel_promille`, `is_primair_contact` en de `daterange`-historie, maar het
+scherm koppelt per aanmaak precies één eigenaar (de beheerder zelf, AC2.1).
+Meerdere eigenaren, aandelen 50/50 en de eigenaarswissel met
+verrekenoverzicht zijn blok V03; V04 voegt de uitnodigingsflow toe (AC2.2).

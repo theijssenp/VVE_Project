@@ -52,6 +52,7 @@ import { SignJWT, jwtVerify } from 'jose';
 import { and, eq, isNull } from 'drizzle-orm';
 import { createHash, randomBytes } from 'node:crypto';
 import { apparaatSessie } from '../../database/schema/apparaat-sessie.js';
+import { rolToewijzing } from '../../database/schema/rol-toewijzing.js';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { type Klok, SystemKlok } from '../system-klok.js';
 
@@ -107,6 +108,17 @@ export abstract class TokenFout extends Error {
 export class OnbekendTokenFout extends TokenFout {
   constructor() {
     super('Onbekend refresh-token');
+  }
+}
+
+/**
+ * De persoon heeft geen lopende `rol_toewijzing` in de gevraagde VvE. De
+ * keuze van de actieve VvE is geen client-meningsuiting: de service controleert
+ * de rol tegen de database van het moment (spec §7.5 stap 2) en weigert anders.
+ */
+export class GeenRolInVveFout extends TokenFout {
+  constructor() {
+    super('Geen lopende rol in deze VvE');
   }
 }
 
@@ -184,16 +196,26 @@ export function hashVanToken(token: string): string {
  * Tekent een access-token (HS256) voor `persoonId` met een 15-minuut
  * validiteit (spec §7.6). `iss`/`aud` zijn correct gezet; `sub` is de
  * persoons-id als string (JWT vereist een string `sub`).
+ *
+ * `vveId` (optioneel): de actieve VvE van de sessie — de claim waarop de
+ * TenantGuard de tenant bepaalt (spec §7.5 stap 2). Wordt hij niet meegegeven,
+ * dan bevat het token géén `vve_id`-claim: de TenantGuard weigert zo'n token
+ * op tenant-scoped routes.
  */
 export async function tekenAccessToken(
   persoonId: bigint,
   klok: Klok,
-  config: { geheim: string; minuten: number },
+  config: { geheim: string; minuten: number; vveId?: bigint | null },
 ): Promise<string> {
   const nu = klok.nu();
   const geheim = new TextEncoder().encode(config.geheim);
   const nuSec = Math.floor(nu.getTime() / 1000);
-  return new SignJWT({ sub: String(persoonId) })
+  // string is de veilige vorm voor een claim; sub heeft dezelfde behandeling.
+  const claims: Record<string, string> = { sub: String(persoonId) };
+  if (config.vveId !== undefined && config.vveId !== null) {
+    claims['vve_id'] = String(config.vveId);
+  }
+  return new SignJWT(claims)
     .setProtectedHeader({ alg: 'HS256', typ: 'JWT' })
     .setIssuedAt(nuSec)
     .setExpirationTime(nuSec + config.minuten * 60)
@@ -271,6 +293,17 @@ export async function verifieerAccessToken(
 export interface TokenService {
   geefTokensUit(persoon: { readonly id: bigint }, info: ApparaatInfo): Promise<TokensUit>;
   verfris(refreshToken: string, info: ApparaatInfo): Promise<VerfrisUit>;
+  /**
+   * Kiest de actieve VvE van de sessie. De service controleert een lopende
+   * `rol_toewijzing` (spec §7.5 stap 2), zet de kolom en geeft een nieuw
+   * access-token uit mét de `vve_id`-claim — de tenant komt uit het token,
+   * nooit uit de request-parameters.
+   */
+  kiesActieveVve(
+    persoonId: bigint,
+    refreshToken: string,
+    vveId: bigint,
+  ): Promise<{ accessToken: string }>;
   trekSessieIn(sessieId: bigint): Promise<{ ingetrokken: boolean }>;
   /**
    * Trekt de sessie in die bij dit refresh-token hoort — uitloggen van één
@@ -336,6 +369,9 @@ export function maakTokenService(config: TokenServiceConfig): TokenService {
         userAgent: info.userAgent ?? null,
         verlooptOp: verloopt,
         laatsteGebruiktOp: nu,
+        // Actieve VvE wordt ná het inloggen gekozen via POST /auth/actieve-vve
+        // (spec §7.5 stap 2): bij uitgifte bestaat de keuze nog niet.
+        actieveVveId: null,
       })
       .returning({ id: apparaatSessie.id });
 
@@ -356,7 +392,13 @@ export function maakTokenService(config: TokenServiceConfig): TokenService {
    * rolt terug en zou het inname-effect ongedaan maken.
    */
   type VerfrisUitkomst =
-    | { readonly type: 'rotatie'; readonly persoonId: bigint; readonly nieuwRuw: string }
+    | {
+        readonly type: 'rotatie';
+        readonly persoonId: bigint;
+        readonly nieuwRuw: string;
+        /** De actieve VvE van de sessie (geërfd bij de rotatie); null zolang niet gekozen. */
+        readonly actieveVveId: bigint | null;
+      }
     | { readonly type: 'verlopen' }
     | { readonly type: 'herbruik'; readonly familieId: string }
     | { readonly type: 'onbekend' };
@@ -410,8 +452,17 @@ export function maakTokenService(config: TokenServiceConfig): TokenService {
           userAgent: info.userAgent ?? rij.userAgent,
           verlooptOp: rij.verlooptOp,
           laatsteGebruiktOp: nu,
+          // De actieve VvE is een eigenschap van de sessie, niet van het
+          // apparaat: de nieuwe rij erft hem, zodat het access-token na
+          // elke rotatie dezelfde tenant-claim blijft dragen.
+          actieveVveId: rij.actieveVveId,
         });
-        return { type: 'rotatie', persoonId: rij.persoonId, nieuwRuw } as const;
+        return {
+          type: 'rotatie',
+          persoonId: rij.persoonId,
+          nieuwRuw,
+          actieveVveId: rij.actieveVveId,
+        } as const;
       }
 
       // Stap 2: geen actieve rij met dit token. Bestaat het dan als een
@@ -452,6 +503,9 @@ export function maakTokenService(config: TokenServiceConfig): TokenService {
         const accessToken = await tekenAccessToken(uitkomst.persoonId, klok, {
           geheim,
           minuten: accessTokenMinuten,
+          // Geërfd van de sessie-rij: de tenant-keuze overleeft elke rotatie
+          // (spec §7.5 stap 2). Null zolang er nog geen VvE is gekozen.
+          vveId: uitkomst.actieveVveId,
         });
         return {
           accessToken,
@@ -460,6 +514,71 @@ export function maakTokenService(config: TokenServiceConfig): TokenService {
         };
       }
     }
+  }
+
+  /**
+   * Zet de actieve VvE op de sessie-rij — maar alleen met een lopende rol in
+   * die VvE, gecontroleerd tegen de database van het moment. De sessie wordt
+   * geïdentificeerd met het ruwe refresh-token (de httpOnly-cookie van de
+   * client): een sessie-id zou na elke rotatie verouderd zijn, de cookie is
+   * de levende verwijzing naar de actieve rij.
+   *
+   * Het nieuw uitgegeven access-token draagt de `vve_id`-claim en is dus
+   * meteen bruikbaar op de tenant-scoped routes; de oude (zonder claim) loopt
+   * vanzelf binnen 15 minuten af. De rij wordt overschreven, niet geroteerd:
+   * het refresh-token verandert niet, alleen de tenant-keuze.
+   */
+  async function kiesActieveVve(
+    persoonId: bigint,
+    refreshToken: string,
+    vveId: bigint,
+  ): Promise<{ accessToken: string }> {
+    // 1. De sessie moet bestaan, actief zijn en van deze persoon zijn.
+    const [sessie] = await config.db
+      .select({ id: apparaatSessie.id, verlooptOp: apparaatSessie.verlooptOp })
+      .from(apparaatSessie)
+      .where(
+        and(
+          eq(apparaatSessie.refreshTokenHash, hashVanToken(refreshToken)),
+          eq(apparaatSessie.persoonId, persoonId),
+          isNull(apparaatSessie.ingetrokkenOp),
+        ),
+      )
+      .limit(1);
+    if (sessie === undefined) {
+      throw new OnbekendTokenFout();
+    }
+    if (sessie.verlooptOp.getTime() <= klok.nu().getTime()) {
+      throw new VerlopenTokenFout();
+    }
+
+    // 2. Er moet een lopende rol in deze VvE zijn (spec §7.5 stap 2).
+    const [rol] = await config.db
+      .select({ id: rolToewijzing.id })
+      .from(rolToewijzing)
+      .where(
+        and(
+          eq(rolToewijzing.vveId, vveId),
+          eq(rolToewijzing.persoonId, persoonId),
+          isNull(rolToewijzing.eindDatum),
+        ),
+      )
+      .limit(1);
+    if (rol === undefined) {
+      throw new GeenRolInVveFout();
+    }
+
+    // 3. Zet de kolom en teken een access-token met de claim.
+    await config.db
+      .update(apparaatSessie)
+      .set({ actieveVveId: vveId })
+      .where(eq(apparaatSessie.id, sessie.id));
+    const accessToken = await tekenAccessToken(persoonId, klok, {
+      geheim,
+      minuten: accessTokenMinuten,
+      vveId,
+    });
+    return { accessToken };
   }
 
   async function trekSessieInViaToken(refreshToken: string): Promise<{ ingetrokken: boolean }> {
@@ -499,6 +618,7 @@ export function maakTokenService(config: TokenServiceConfig): TokenService {
   return {
     geefTokensUit,
     verfris,
+    kiesActieveVve,
     trekSessieIn,
     trekSessieInViaToken,
     trekAlleSessiesIn,

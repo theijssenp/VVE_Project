@@ -40,3 +40,12 @@ export const rolType = pgEnum('rol_type', [
   'eigenaar',
   'bewoner',
 ] as const);
+
+// Blok V02: typen wooneenheden (spec §6.1 `eenheid_type`, tabel §6.4).
+export const eenheidType = pgEnum('eenheid_type', [
+  'woning',
+  'parkeerplaats',
+  'berging',
+  'bedrijfsruimte',
+  'gemeenschappelijk',
+] as const);

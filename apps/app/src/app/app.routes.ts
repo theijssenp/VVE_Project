@@ -31,6 +31,13 @@ export const routes: Routes = [
     loadComponent: () => import('./vve/vve-overzicht.page.js').then((m) => m.VveOverzichtPage),
   },
   {
+    // Wooneenheden van de actieve VvE (V02): lijst met breukdelen en
+    // eigenaren plus de AC2.3-somcontrole en een invoerformulier.
+    path: 'vve/eenheden',
+    canActivate: [vereistSessie, vereistVveRol],
+    loadComponent: () => import('./vve/eenheden.page.js').then((m) => m.EenhedenPage),
+  },
+  {
     // Alleen de applicatiebeheerder: hier worden VvE's opgevoerd (AC1.1) en
     // beheerderswachtwoorden uitgereikt (AC1.3).
     path: 'beheer',

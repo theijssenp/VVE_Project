@@ -8,6 +8,7 @@ import { BigIntInterceptor } from './gemeenschappelijk/bigint.interceptor.js';
 import { HttpFoutFilter } from './gemeenschappelijk/http-fout.filter.js';
 import { HealthController } from './modules/health/health.controller.js';
 import { AuthController } from './modules/auth/auth.controller.js';
+import { EenhedenController } from './modules/eenheden/eenheden.controller.js';
 import { VveController } from './modules/vve/vve.controller.js';
 import { controleerRouteDeclaraties } from './gemeenschappelijk/auth/route-inventaris.js';
 
@@ -21,7 +22,12 @@ import { controleerRouteDeclaraties } from './gemeenschappelijk/auth/route-inven
  * Alle controllers van de applicatie. Een nieuwe module voegt zijn controller
  * hier toe; de opstartcontrole leest daaruit de werkelijke routes.
  */
-export const ALLE_CONTROLLERS = [HealthController, AuthController, VveController];
+export const ALLE_CONTROLLERS = [
+  HealthController,
+  AuthController,
+  VveController,
+  EenhedenController,
+];
 
 export async function bootstrap(): Promise<void> {
   // Test #32 (spec §7.5): geen route zonder rechtdeclaratie, vóór er iets luistert.

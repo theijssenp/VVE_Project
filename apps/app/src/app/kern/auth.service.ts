@@ -141,6 +141,35 @@ export class AuthService {
     }
   }
 
+  /**
+   * Zorgt dat het access-token de actieve VvE draagt (spec §7.5 stap 2).
+   *
+   * Neemt de eerste VvE uit het profiel (de applicatie kent nog geen
+   * VvE-wissel op de sessie) en vraagt de server om een nieuw access-token
+   * met `vve_id`-claim. Faalt dat — geen rol, onbekende VvE — dan blijft het
+   * token zonder claim en weigert de server de tenant-scoped routes, zoals
+   * bedoeld.
+   */
+  async kiesActieveVve(vveId: string): Promise<void> {
+    const antwoord = await firstValueFrom(
+      this.#http.post<{ accessToken: string }>(
+        `${this.#basis}/auth/actieve-vve`,
+        { vveId },
+        { withCredentials: true },
+      ),
+    );
+    this.#access.zet(antwoord.accessToken);
+  }
+
+  /** Gemak voor het startscherm: de eerste VvE uit het profiel kiezen. */
+  async kiesActieveVveVanEerste(): Promise<void> {
+    const eerste = this.profiel()?.vves[0]?.vveId;
+    if (eerste === undefined) {
+      throw new Error('Geen VvE in het profiel om als actief te kiezen.');
+    }
+    await this.kiesActieveVve(eerste);
+  }
+
   async uitloggen(): Promise<void> {
     try {
       await firstValueFrom(

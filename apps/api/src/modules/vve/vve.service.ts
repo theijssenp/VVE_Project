@@ -26,6 +26,7 @@ import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { persoon } from '../../database/schema/persoon.js';
 import { rolToewijzing } from '../../database/schema/rol-toewijzing.js';
 import { vve } from '../../database/schema/vve.js';
+import { wooneenheid } from '../../database/schema/wooneenheid.js';
 import { maakAuditService } from '../../gemeenschappelijk/audit/audit-service.js';
 import { beoordeelWachtwoord, hashWachtwoord } from '../../gemeenschappelijk/auth/wachtwoord.js';
 import type { Klok } from '../../gemeenschappelijk/system-klok.js';
@@ -323,10 +324,15 @@ export function maakVveService(config: VveServiceConfig): VveService {
         .innerJoin(persoon, eq(persoon.id, rolToewijzing.persoonId))
         .where(and(eq(rolToewijzing.rol, 'beheerder'), isNull(rolToewijzing.eindDatum)));
 
+      // AC1.5: het aantal eenheden per VvE, ook in één slag.
+      const tellingen = await db
+        .select({ vveId: wooneenheid.vveId, aantal: sql<number>`count(*)::int` })
+        .from(wooneenheid)
+        .groupBy(wooneenheid.vveId);
+
       return vves.map((v) => ({
         ...v,
-        // Eenheden bestaan pas vanaf blok V02; tot dan is dit eerlijk gezien nul.
-        aantalEenheden: 0,
+        aantalEenheden: tellingen.find((t) => t.vveId === v.id)?.aantal ?? 0,
         beheerders: beheerders
           .filter((b) => b.vveId === v.id)
           .map((b) => ({

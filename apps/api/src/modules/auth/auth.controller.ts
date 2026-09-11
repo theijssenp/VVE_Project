@@ -13,6 +13,7 @@
 import {
   Body,
   Controller,
+  ForbiddenException,
   Get,
   Inject,
   Post,
@@ -35,7 +36,11 @@ import {
   type InlogService,
   type Profiel,
 } from '../../gemeenschappelijk/auth/inlog.js';
-import { maakTokenService, type TokenService } from '../../gemeenschappelijk/auth/token.js';
+import {
+  GeenRolInVveFout,
+  maakTokenService,
+  type TokenService,
+} from '../../gemeenschappelijk/auth/token.js';
 import { SystemKlok } from '../../gemeenschappelijk/system-klok.js';
 
 /** Naam van de cookie met het refresh-token. */
@@ -177,6 +182,44 @@ export class AuthController {
       await this.#tokens.trekSessieInViaToken(ruw);
     }
     return { uitgelogd: true };
+  }
+
+  /**
+   * Kiest de actieve VvE van de sessie (spec §7.5 stap 2).
+   *
+   * Het verse access-token uit dit antwoord draagt de `vve_id`-claim en is
+   * daarmee het eerste token dat de tenant-scoped routes binnengaat. De
+   * tenant wordt hier gegenereerd, niet gekozen: de service controleert een
+   * lopende rol_toewijzing en weigert zonder (403-achtig, hier 401/400 via
+   * de foutvertaling). Het refresh-token verandert niet; de keuze overleeft
+   * elke latere rotatie via de sessie-rij.
+   */
+  @Post('actieve-vve')
+  @VereistRecht('auth.actieve_vve')
+  @UseGuards(SessieGuard)
+  async kiesActieveVve(
+    @Req() verzoek: Request & { inlogContext?: { persoonId: bigint } },
+    @Res({ passthrough: true }) antwoord: Response,
+    @Body() body: { vveId?: unknown },
+  ): Promise<{ accessToken: string }> {
+    const persoonId = verzoek.inlogContext?.persoonId;
+    if (persoonId === undefined) throw new UnauthorizedException('Geen inlogcontext.');
+    const ruw: unknown = (verzoek.cookies as Record<string, unknown> | undefined)?.[REFRESH_COOKIE];
+    if (typeof ruw !== 'string' || ruw === '') {
+      throw new UnauthorizedException('Geen sessie');
+    }
+    const opgegeven = body.vveId;
+    if (typeof opgegeven !== 'string' || !/^\d+$/.test(opgegeven)) {
+      throw new UnauthorizedException('Ongeldig VvE-id.');
+    }
+    try {
+      return await this.#tokens.kiesActieveVve(persoonId, ruw, BigInt(opgegeven));
+    } catch (fout: unknown) {
+      if (fout instanceof GeenRolInVveFout) {
+        throw new ForbiddenException(fout.message);
+      }
+      throw fout;
+    }
   }
 
   @Get('apparaten')

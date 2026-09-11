@@ -37,6 +37,13 @@ export const apparaatSessie = pgTable('apparaat_sessie', {
   intrekkingReden: text('intrekking_reden'),
   laatsteGebruiktOp: timestamp('laatst_gebruikt_op', { withTimezone: true }),
   aangemaaktOp: timestamp('aangemaakt_op', { withTimezone: true }).notNull().defaultNow(),
+  /**
+   * De actieve VvE van deze sessie (migratie 0011). Gezet via
+   * `POST /auth/actieve-vve`, nadat de service een lopende `rol_toewijzing`
+   * in die VvE heeft gecontroleerd; geclaimd in het access-token en geërfd bij
+   * elke rotatie (spec §7.5 stap 2: de tenant komt uit het token).
+   */
+  actieveVveId: bigint('actieve_vve_id', { mode: 'bigint' }),
 });
 
 export type ApparaatSessie = typeof apparaatSessie.$inferSelect;
