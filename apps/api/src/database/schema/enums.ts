@@ -128,6 +128,21 @@ export const renteGrondslag = pgEnum('rente_grondslag', [
   'geen',
 ] as const);
 
+// Blok A05: `verplichting_soort` is al in 0001 (§6.1-hoofdlijst, volledige
+// soortenlijst); alleen de Drizzle-spiegel hier.
+export const verplichtingSoort = pgEnum('verplichting_soort', [
+  'liftkeuring',
+  'brandmeldinstallatie',
+  'legionella',
+  'nen3140',
+  'opstalverzekering',
+  'aansprakelijkheid',
+  'bestuurdersaansprakelijkheid',
+  'rechtsbijstand',
+  'energielabel',
+  'overig',
+] as const);
+
 // Blok G06: nota's (§6.1 `nota_type`, `nota_status`, `betaalwijze`).
 export const notaType = pgEnum('nota_type', [
   'periodieke_bijdrage',

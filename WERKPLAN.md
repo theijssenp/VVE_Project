@@ -127,7 +127,7 @@ Pas beginnen als de pilot minstens één maand op overboeking heeft gedraaid.
 | A02 | Presentie, volmachten, stemgewicht, quorumtoets met tweede-vergaderingsregeling | M | A01 | M11 · AC11.3, AC11.5 | todo |
 | A03 | Stemmen, uitslagberekening per vereiste meerderheid, besluitenregister met koppeling aan begroting/MJOP | M | A02 | M11 · AC11.4, AC11.6–11.7 | todo |
 | A04 | Meldingen met foto's, statusflow, tijdlijn, toewijzing, SLA-signalering | M | V07 | M12 · AC12.1–12.3 | todo |
-| A05 | Leveranciers, contracten met opzegsignalering, verplichtingenregister (keuringen, polissen) met herinneringen | M | G01 | M12 · AC12.4–12.6 | todo |
+| A05 | Leveranciers, contracten met opzegsignalering, verplichtingenregister (keuringen, polissen) met herinneringen | M | G01 | M12 · AC12.4–12.6 | **klaar** |
 | A06 | Mededelingen, doelgroepen, mailsjablonen per VvE | S | F10 | M13 · AC13.1, AC13.3 | todo |
 
 ## 9. Fase 7 — Native app
@@ -180,7 +180,7 @@ AES-GCM.
 | | Aantal |
 |---|---|
 | Blokken totaal | 71 |
-| Klaar | 27 |
+| Klaar | 28 |
 | Bezig | 0 |
 
 Statuswaarden: `todo` · `bezig` · `klaar` · `overgeslagen`.

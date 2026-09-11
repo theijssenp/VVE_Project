@@ -1870,7 +1870,7 @@ levering, zoals bij de AC5.7-PDF in G04.
 rij in `aanmaning` met de brieftekst als bewijs — `UNIQUE (nota_id, stap)`
 maakt dubbele herinneringen onmogelijk. Termijnen instelbaar per VvE
 (`aanmaning_instelling`, defaults letter §5.5); de deadline is verval +
-dagen van de *nieuwe* stap en wordt bewaakt (getest met T+2, T+9, T+30 als
+dagen van de _nieuwe_ stap en wordt bewaakt (getest met T+2, T+9, T+30 als
 weigeringen).
 
 **De veertiendagenbrief is de aanmaning (AC6.5).** Voor consumenten moet de
@@ -1890,3 +1890,26 @@ bedrag én openstaand.
 andere tabel faalt hard ("table nota is not part of the query"); de
 boekjaar-vergrendeling loopt via `tx.execute(sql`SELECT id FROM boekjaar …
 FOR UPDATE`)` — de ruwe execute is daar het juiste gereedschap.
+
+---
+
+## A05 — Leveranciers en verplichtingenregister (11-09-2026)
+
+**G08-les tweede keer hard toegepast.** `verplichting_soort` stond al in
+0001 — met de volledige soortenlijst uit de spec (liftkeuring,
+brandmeldinstallatie, legionella, nen3140, opstalverzekering,
+aansprakelijkheid, bestuurdersaansprakelijkheid, rechtsbijstand,
+energielabel, overig). Eerste opzet had een eigen kortere enum; de
+migratiefout kwam vóór de eerste testrun, in de buildfase. Vervolgens de
+Drizzle-spiegel en de controller-validatie op de 0001-lijst gezet.
+
+**Signaleringen live gerekend, niet opgeslagen.** De opzegsignalering
+(AC12.4: 90 dagen vóór het opzegvenster) en de
+verplichtingsherinneringen (T-60/T-14) zijn afgeleide vlaggen — opgeslagen
+booleans raken uit de pas met elke peildatum. Getest met een contract
+einddatum+30 (signaal aan) tegenover een ver contract (uit).
+
+**Facturen (AC12.6) bewust beperkt.** De leveranciersfactuur volgt de
+G06-kosten-nota (nummerreeks, grootboekrekening); de MJOP/melding-koppeling
+volgt in M01/A04. De migratie laat die kolommen bewust weg in plaats van
+dode FK's — vooruitverwijzingen horen bij het blok dat ze invult.
