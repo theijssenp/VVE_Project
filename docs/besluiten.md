@@ -1860,3 +1860,33 @@ Invariant in de test: som(buckets) == totaal openstaand, exact.
 incassobureau of deurwaarder verwacht. De PDF-export van het dossier volgt
 in G13; de datastructuur (soort, kenmerk, bedrag, omschrijving) is hier de
 levering, zoals bij de AC5.7-PDF in G04.
+
+---
+
+## G11 — Aanmaningstraject (11-09-2026)
+
+**Drie stappen als documenten, niet als status (§5.5/AC6.5).** Elke stap
+(herinnering T+7 kosteloos, aanmaning T+21, ingebrekestelling T+45) is een
+rij in `aanmaning` met de brieftekst als bewijs — `UNIQUE (nota_id, stap)`
+maakt dubbele herinneringen onmogelijk. Termijnen instelbaar per VvE
+(`aanmaning_instelling`, defaults letter §5.5); de deadline is verval +
+dagen van de *nieuwe* stap en wordt bewaakt (getest met T+2, T+9, T+30 als
+weigeringen).
+
+**De veertiendagenbrief is de aanmaning (AC6.5).** Voor consumenten moet de
+brief waarin incassokosten worden aangezegd expliciet de wettelijke
+veertiendagentermijn noemen; de aanmaning-tekst doet dat en is gemarkeerd
+met `is_veertiendagen`.
+
+**Kosten als aparte nota (AC6.6-letter, getest).** De WIK-incassokosten
+(15%, min € 40) worden aangezegd op de aanmaning en geboekt bij de
+ingebrekestelling; rente (instelbaar, per maand over het openstaande) erbij
+als de grondslag niet 'geen' is. Beide als APARTE nota met eigen nummer uit
+de G06-reeks (FOR UPDATE op het boekjaar, zelfde patroon als de
+periode-generatie); de oorspronkelijke nota blijft onveranderd — getest op
+bedrag én openstaand.
+
+**Drizzle-les:** `.from(sql'boekjaar b')` met een kolomreferentie uit een
+andere tabel faalt hard ("table nota is not part of the query"); de
+boekjaar-vergrendeling loopt via `tx.execute(sql`SELECT id FROM boekjaar …
+FOR UPDATE`)` — de ruwe execute is daar het juiste gereedschap.

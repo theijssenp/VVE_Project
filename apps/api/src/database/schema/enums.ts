@@ -116,6 +116,18 @@ export const betalingBron = pgEnum('betaling_bron', [
   'incasso',
   'verrekening',
 ] as const);
+// Blok G11: aanmaningstraject (§6.1 `aanmaning_stap`, `rente_grondslag`).
+export const aanmaningStap = pgEnum('aanmaning_stap', [
+  'herinnering',
+  'aanmaning',
+  'ingebrekestelling',
+] as const);
+export const renteGrondslag = pgEnum('rente_grondslag', [
+  'wettelijk',
+  'reglementair',
+  'geen',
+] as const);
+
 // Blok G06: nota's (§6.1 `nota_type`, `nota_status`, `betaalwijze`).
 export const notaType = pgEnum('nota_type', [
   'periodieke_bijdrage',

@@ -24,6 +24,8 @@ export {
   notaStatus,
   betaalwijze,
   betalingBron,
+  aanmaningStap,
+  renteGrondslag,
 } from './enums.js';
 export { citext, bytea } from './types.js';
 export { vve } from './vve.js';
@@ -47,6 +49,7 @@ export { bijdrageSchema, bijdrageRegel } from './bijdrage.js';
 export { nota, notaRegel } from './nota.js';
 export { pdfDocument } from './pdf-document.js';
 export { betaling, betalingKoppeling } from './betaling.js';
+export { aanmaning, aanmaningInstelling } from './aanmaning.js';
 export type { Vve, NieuweVve } from './vve.js';
 export type { Persoon, NieuwePersoon } from './persoon.js';
 export type { RolToewijzing, NieuweRolToewijzing } from './rol-toewijzing.js';
@@ -88,3 +91,9 @@ export type {
   BetalingKoppeling,
   NieuweBetalingKoppeling,
 } from './betaling.js';
+export type {
+  Aanmaning,
+  NieuweAanmaning,
+  AanmaningInstelling,
+  NieuweAanmaningInstelling,
+} from './aanmaning.js';

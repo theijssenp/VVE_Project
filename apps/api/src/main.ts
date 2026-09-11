@@ -15,6 +15,7 @@ import { BijdrageController } from './financieel/bijdrage.controller.js';
 import { NotaController } from './financieel/nota.controller.js';
 import { NotaVerzendController } from './financieel/nota-verzend.controller.js';
 import { BetalingController } from './financieel/betaling.controller.js';
+import { AanmaningController } from './financieel/aanmaning.controller.js';
 import { DebiteurenController } from './financieel/debiteuren.controller.js';
 import { UitnodigingenController } from './modules/uitnodigingen/uitnodigingen.controller.js';
 import { VerdeelsleutelController } from './financieel/verdeelsleutel.controller.js';
@@ -45,6 +46,7 @@ export const ALLE_CONTROLLERS = [
   NotaVerzendController,
   BetalingController,
   DebiteurenController,
+  AanmaningController,
 ];
 
 export async function bootstrap(): Promise<void> {

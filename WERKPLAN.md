@@ -78,7 +78,7 @@ Alles in deze fase werkt zónder incasso. Het betalingskenmerk op de nota is hie
 | G08 | Betalingen handmatig registreren, koppelen, deelbetaling en vooruitbetaling met creditsaldo | M | G06 | M6 · AC6.3, tests 8–9 | **klaar** |
 | G09 | Debiteurenoverzicht met ouderdomsanalyse en debiteurendossier als PDF | M | G08 | M6 · AC6.4, AC6.8 | **klaar** |
 | G10 | Openingsbalans en overnamewizard voor een bestaande VvE | L | G08 | §13.2 · AC5.6 | todo |
-| G11 | Aanmaningstraject in drie stappen, WIK-brief, rente en incassokosten als aparte nota | M | G09 | §5.5 · AC6.5–6.6 | todo |
+| G11 | Aanmaningstraject in drie stappen, WIK-brief, rente en incassokosten als aparte nota | M | G09 | §5.5 · AC6.5–6.6 | **klaar** |
 
 ## 5. Fase 3 — Bank, afletteren en jaarrekening
 
@@ -180,7 +180,7 @@ AES-GCM.
 | | Aantal |
 |---|---|
 | Blokken totaal | 71 |
-| Klaar | 26 |
+| Klaar | 27 |
 | Bezig | 0 |
 
 Statuswaarden: `todo` · `bezig` · `klaar` · `overgeslagen`.
