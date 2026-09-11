@@ -1827,7 +1827,7 @@ laat de nota onveranderd — getest.
 
 **Creditsaldo (test #9) is de kern van de automatische verwerking.** De
 som van betaald-maar-niet-gekoppeld per eenheid is het creditsaldo; bij het
-*genereren* van een nieuwe nota (G06) verrekent de nota-service dat saldo
+_genereren_ van een nieuwe nota (G06) verrekent de nota-service dat saldo
 automatisch: een betaling met bron 'verrekening' + koppeling in dezelfde
 transactie, nota-status bijgewerkt. Het saldo is live gerekend (SUM over
 betalingen − SUM over koppelingen), nooit opgeslagen — opgeslagen saldi
@@ -1837,3 +1837,26 @@ raken uit de pas met append-only correcties.
 restant; volledig → betaald met 0, ook over meerdere nota's in één
 betaling; #9 vooruitbetaling → creditsaldo → automatische verwerking met de
 februari-nota (bron 'verrekening' zichtbaar in de betalingslijst).
+
+---
+
+## G09 — Debiteurenoverzicht (11-09-2026)
+
+**Lees-only venster op G06/G08.** Geen nieuwe tabellen: de analyse telt de
+bestaande nota's (open/deels_betaald) en het dossier mengt nota's en
+betalingen chronologisch. `debiteuren.dossier` is een apart recht (naast
+`betaling.lezen`), want §8.3 eist toegangslogging op het dossier van een
+ander lid — de audit-entry `debiteuren.dossier_ingezien` zet de kijker als
+persoon (FK bewees de noodzaak: persoon 0n bestaat niet).
+
+**Ouderdomsanalyse op SQL-interval-rekenkunde.** Eerste versie gebruikte
+`date >= interval` — bestaat niet in Postgres ('operator does not exist');
+de peildatum wordt gecast (`${vandaag}::date - INTERVAL '29 days'`).
+Grenzen: 0–30 = 29/0 dagen geleden t/m vandaag (incl.), 90+ = ouder dan 90.
+Invariant in de test: som(buckets) == totaal openstaand, exact.
+
+**Dossier is chronologisch gemengd, niet per soort.** Nota's en betalingen
+(gekoppeld én verrekeningen) staan op datum naast elkaar — precies wat een
+incassobureau of deurwaarder verwacht. De PDF-export van het dossier volgt
+in G13; de datastructuur (soort, kenmerk, bedrag, omschrijving) is hier de
+levering, zoals bij de AC5.7-PDF in G04.
