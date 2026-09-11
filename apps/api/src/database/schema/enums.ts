@@ -89,3 +89,12 @@ export const begrotingStatus = pgEnum('begroting_status', [
   'vastgesteld',
   'gesloten',
 ] as const);
+
+// Blok B01: SEPA-machtiging (§6.1 `machtiging_type`, `machtiging_status`).
+export const machtigingType = pgEnum('machtiging_type', ['CORE', 'B2B'] as const);
+export const machtigingStatus = pgEnum('machtiging_status', [
+  'actief',
+  'geblokkeerd',
+  'ingetrokken',
+  'verlopen',
+] as const);

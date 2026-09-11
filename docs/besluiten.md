@@ -1675,3 +1675,37 @@ verwijzing naar een niet-bestaande tabel aanraakt.
 boekingsservice weigert boeken in een afgesloten jaar terecht; de
 vorig-jaar-historie is er simpelweg, dus de test insert een gebalanceerde
 boeking direct (waar de deferred trigger bij COMMIT over toeziet).
+
+---
+
+## B01 — IBAN-versleuteling (11-09-2026)
+
+**Het §6.2-drieluik als één crypto-module (`bank/iban-versleuteling.ts`).**
+AES-256-GCM met een willekeurige 12-byte nonce per versleuteling
+(nonce ‖ ciphertext ‖ tag, precies de spec-vorm); een vaste IV is met
+GCM-hergebruik van nonce de ernstigste mogelijke fout en F12 bewaakt hem.
+HMAC-SHA256 over het genormaliseerde IBAN met een aparte zoeksleutel:
+deterministisch en indexeerbaar, zodat de matchingmotor (B05) koppelt
+zonder ooit te ontsleutelen. Twee aparte sleutels uit de omgeving
+(`IBAN_VERSLEUTEL_SLEUTEL`, `IBAN_HMAC_SLEUTEL`, minimaal 32 bytes, geen
+standaardwaarde — §8.2).
+
+**Normalisatie vóór de HMAC.** Spaties/streepjes eruit, hoofdletters:
+`nl91 abna 0417 1643 00` en `NL91ABNA0417164300` matchen op dezelfde HMAC.
+Zonder deze stap is de zoeksleutel waardeloos, want banken groeperen
+allerlei. De mod-97-toets (checksum) weigert verzonnen IBAN's vóór het
+versleutelen.
+
+**`sleutel_versie` op de rij, rotatietaak nog open.** De kolom staat en de
+module levert `HUIDIGE_SLEUTEL_VERSIE = 1`; de achtergrondtaak die rijen
+naar een nieuwe versie hersleutelt is het resterende deel van B01 en volgt
+met de bankimport (B02), die dezelfde sleutel nodig heeft voor de ruwe
+importbestanden in `/storage/import`.
+
+**Tabel `sepa_machtiging` is de eerste met het drieluik.** Exact de
+spec-tabel (§6.5), inclusief de vorig-kenmerk/vorig-iban-velden voor de
+mandaatwijziging (AC8.8) en de storno-teller (AC8.7) — die kolommen staan
+klaar voor I01/I06. Gebruikers van de kolommen gaan door de module:
+`beveiligIban` vult, `ontsleutelIban` leest, niemand raakt de bytea's
+rechtstreeks. Index op `iban_hmac` bewijst in de test dat een zoekactie de
+rij vindt zonder te ontsleutelen.
