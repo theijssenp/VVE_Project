@@ -16,7 +16,7 @@
  * er niets aan de hand is.
  */
 import { Component, computed, inject, signal } from '@angular/core';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import {
   IonBadge,
   IonButton,
@@ -56,6 +56,7 @@ const MAANDEN = [
   selector: 'vve-overzicht',
   standalone: true,
   imports: [
+    RouterLink,
     IonBadge,
     IonButton,
     IonCard,
@@ -120,6 +121,7 @@ const MAANDEN = [
         hier ziet, is alles wat er nu werkelijk over uw VvE is vastgelegd.
       </ion-note>
 
+      <ion-button expand="block" fill="outline" routerLink="/beveiliging">Beveiliging</ion-button>
       <ion-button expand="block" fill="outline" (click)="uitloggen()">Uitloggen</ion-button>
     </ion-content>
   `,

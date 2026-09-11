@@ -31,7 +31,7 @@ import { Reflector } from '@nestjs/core';
 import { persoon } from '../../database/schema/persoon.js';
 import { rolToewijzing } from '../../database/schema/rol-toewijzing.js';
 import { VEREIST_RECHT_SLEUTEL } from './vereist-recht.js';
-import { maakMfaGate, type MfaGate } from './mfa-gate.js';
+import { MfaVereistFout, maakMfaGate, type MfaGate } from './mfa-gate.js';
 import { verifieerAccessToken, type DecodedAccessToken } from './token.js';
 import type { Klok } from '../system-klok.js';
 
@@ -192,7 +192,20 @@ export class RolGuard implements CanActivate {
     }
     // Geldstroomrechten vereisen MFA (§7.6/§8.5, F07-gate).
     if (this.mfaGate.isGeldstroomRecht(metadata.recht) && !inlog.mfaGeauthenticeerd) {
-      await this.mfaGate.vereisMfaVoor(inlog.persoonId, metadata.recht);
+      try {
+        await this.mfaGate.vereisMfaVoor(inlog.persoonId, metadata.recht);
+      } catch (fout: unknown) {
+        // `MfaVereistFout` is een weigering, geen storing. Zonder deze vertaling
+        // viel hij als onbekende fout door de filter heen en kreeg de gebruiker
+        // een 500 met een referentienummer — een geldstroomhandeling die eruitziet
+        // alsof de server stuk is in plaats van "u mist een tweede factor".
+        // De bestaande guardtest zag dit niet: die roept de guard rechtstreeks
+        // aan en toetst alleen dát hij werpt.
+        if (fout instanceof MfaVereistFout) {
+          throw alsNestFout(new GuardFout(403, fout.message));
+        }
+        throw fout;
+      }
     }
     return true;
   }

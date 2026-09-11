@@ -24,19 +24,32 @@ Oordeel: **akkoord** · **akkoord met kanttekening** · **gat**.
 Één ding is bewust _niet_ getoetst: of de berekeningen inhoudelijk juist zijn volgens boek 5
 BW en de modelreglementen. Dat is juridisch werk, geen codewerk.
 
+## Stand van de bevindingen
+
+Bijgewerkt 12-09-2026. De onderstaande tabel is het register; hieronder staat wat er sinds
+de controle mee is gedaan.
+
+**Opgelost:** B-01, B-02, B-03 (MFA over HTTP, zie de sectie "Herstelronde" onderaan).
+**Nieuw gevonden tijdens het herstel:** B-10 t/m B-13.
+**Nog open:** B-04 t/m B-09, B-10.
+
 ## Bevindingenregister
 
-| Nr   | Blok | Ernst    | Bevinding                                                                                                                                                                                                     |
-| ---- | ---- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| B-01 | F07  | **hoog** | MFA is nergens over HTTP bereikbaar: geen endpoint voor passkeys, TOTP of herstelcodes. Het blok staat op `klaar`.                                                                                            |
-| B-02 | G02  | **hoog** | `boekjaar afsluiten` is daardoor voor iedereen onbereikbaar: het recht zit in de geldstroomlijst en de RolGuard eist een tweede factor die niemand kan activeren.                                             |
-| B-03 | F11  | middel   | Het MFA-scherm van de client POST naar `/api/auth/mfa`, een route die niet bestaat. Dode flow.                                                                                                                |
-| B-04 | V01  | middel   | Geen enkele servertest. Spec-test #29 (wachtwoord opnieuw zetten trekt álle sessies in) is ongetest, terwijl de code het wél doet.                                                                            |
-| B-05 | F06  | middel   | Spec-test #35 is half: de familie wordt ingetrokken, de waarschuwingsmail bestaat niet. Het werkplan claimt test 35.                                                                                          |
-| B-06 | F04  | middel   | Zeven tabellen zonder RLS. Voor één (`persoon`) staat een onderbouwing; voor `rol_toewijzing` en `apparaat_sessie` belooft migratie 0003 policies in F06/F08 — die blokken zijn `klaar`, de policies er niet. |
-| B-07 | F04  | laag     | De RLS-test oefent alleen de tabel `vve`. Spec-test #33 noemt `nota`. De test is niet meegegroeid met de 27 andere tabellen.                                                                                  |
-| B-08 | G06  | laag     | Spec-test #10 vraagt 50 gelijktijdige generaties; de test doet er 15.                                                                                                                                         |
-| B-09 | plan | middel   | Spec-tests #26, #27 en #28 staan in geen enkel werkblok. Ze worden dus nooit gebouwd. #27 wordt in §8.1 juist als kernverdediging genoemd.                                                                    |
+| Nr   | Blok    | Ernst    | Bevinding                                                                                                                                                                                                                                                              |
+| ---- | ------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| B-01 | F07     | **hoog** | MFA is nergens over HTTP bereikbaar: geen endpoint voor passkeys, TOTP of herstelcodes. Het blok staat op `klaar`.                                                                                                                                                     |
+| B-02 | G02     | **hoog** | `boekjaar afsluiten` is daardoor voor iedereen onbereikbaar: het recht zit in de geldstroomlijst en de RolGuard eist een tweede factor die niemand kan activeren.                                                                                                      |
+| B-03 | F11     | middel   | Het MFA-scherm van de client POST naar `/api/auth/mfa`, een route die niet bestaat. Dode flow.                                                                                                                                                                         |
+| B-04 | V01     | middel   | Geen enkele servertest. Spec-test #29 (wachtwoord opnieuw zetten trekt álle sessies in) is ongetest, terwijl de code het wél doet.                                                                                                                                     |
+| B-05 | F06     | middel   | Spec-test #35 is half: de familie wordt ingetrokken, de waarschuwingsmail bestaat niet. Het werkplan claimt test 35.                                                                                                                                                   |
+| B-06 | F04     | middel   | Zeven tabellen zonder RLS. Voor één (`persoon`) staat een onderbouwing; voor `rol_toewijzing` en `apparaat_sessie` belooft migratie 0003 policies in F06/F08 — die blokken zijn `klaar`, de policies er niet.                                                          |
+| B-07 | F04     | laag     | De RLS-test oefent alleen de tabel `vve`. Spec-test #33 noemt `nota`. De test is niet meegegroeid met de 27 andere tabellen.                                                                                                                                           |
+| B-08 | G06     | laag     | Spec-test #10 vraagt 50 gelijktijdige generaties; de test doet er 15.                                                                                                                                                                                                  |
+| B-10 | F07/F08 | middel   | De MFA-poort toetst _bezit_ van een tweede factor, niet of die zojuist gebruikt is. Wie TOTP heeft, komt er met elk token langs. Herauthenticatie per handeling stond in de F07-code aangekondigd voor F08 en is daar niet gebouwd.                                    |
+| B-11 | F07     | **hoog** | `totp.ts` laadde otplib met een kale `require` in een ESM-pakket. In het echte Node-proces bestaat `require` daar niet: elke TOTP-handeling wierp een `ReferenceError` en werd een 500. De testrunner biedt wél CJS-interop, dus geen enkele test zag het. _Opgelost._ |
+| B-12 | V02/V04 | **hoog** | De clientbuild (`npm run build:app`) faalt op gecommit werk: ontbrekende `FormsModule`, een ontbrekende methode en een signal waar de template een object verwacht. CI is hierop rood sinds V04. _Opgelost._                                                           |
+| B-13 | proces  | middel   | `docs/besluiten.md` stond ongeformatteerd in de commit, dus ook `npm run format:check` was rood. Twee van de vijf CI-stappen faalden zonder dat het opviel. _Opgelost._                                                                                                |
+| B-09 | plan    | middel   | Spec-tests #26, #27 en #28 staan in geen enkel werkblok. Ze worden dus nooit gebouwd. #27 wordt in §8.1 juist als kernverdediging genoemd.                                                                                                                             |
 
 Wat hier **niet** in staat is even belangrijk: de 24 migraties, de RLS-uitrol over 28
 tabellen, de hashketen, de tokenrotatie en de financiële kern zijn stuk voor stuk
@@ -273,3 +286,70 @@ standaard.
 `apps/api/src/financieel/eigenaarschap-service.ts` staat ongetrackt in de working tree,
 terwijl V03 (eigenaarschap) op `todo` staat. Werk in uitvoering uit een andere sessie,
 vermoedelijk — het valt buiten deze controle.
+
+## Herstelronde 12-09-2026
+
+Wat er na de controle is gerepareerd, en wat dat opleverde.
+
+### B-01/B-03 — MFA heeft een HTTP-kant gekregen
+
+Nieuwe `MfaController` op `/auth/mfa`: status opvragen, TOTP activeren (secret, otpauth-URI
+en tien herstelcodes, één keer getoond), de step-up zelf met een code óf een herstelcode, en
+de passkey-routes voor registratie en verificatie. Alles achter de `SessieGuard` — de tweede
+factor volgt hier altijd op een geslaagde wachtwoordinlog, dus de persoon is al bekend en er
+is geen pad waarlangs een onbekende bezoeker WebAuthn-opties kan opvragen.
+
+De tokenlaag kreeg de ontbrekende helft: `tekenAccessToken` kan nu de `mfa`-claim zetten en
+`markeerMfaGeauthenticeerd` geeft na een geslaagde step-up een nieuw access-token uit. De
+`vve_id`-claim van de sessie gaat mee, anders zou een step-up de tenantkeuze wissen.
+
+De inlogroute geeft niet langer een vaste `mfaVereist: false` terug maar het eerlijke
+antwoord uit de MFA-poort. Daarmee toont de client zijn tweede-factorscherm werkelijk — dat
+scherm bestond al en wees naar een route die niet bestond.
+
+Aan de clientkant: een eigen scherm `/beveiliging`, bereikbaar vanaf alle drie de
+startschermen. Bewust niet als sectie op het portaal: dat is het scherm van de eigenaar, en
+juist de applicatiebeheerder en de VvE-beheerder — de twee rollen die de geldstroomrechten
+dragen — komen daar nooit. Het MFA-scherm kreeg een herstelcode-optie, voor wie zijn
+telefoon kwijt is.
+
+### B-02 — de geldstroompoort gaat weer open
+
+Nagemeten tegen een draaiende server: `POST /financieel/boekjaren/1/afsluiten` gaf 403 met
+de melding dat er een tweede factor ontbreekt, en ná activatie plus step-up 201. Het token
+droeg daarbij `{sub, vve_id, mfa: true}`.
+
+Onderweg bleek de weigering zelf ook stuk: `MfaVereistFout` viel als onbekende fout door de
+foutfilter heen en werd een **500 met een referentienummer**. Een geldstroomhandeling zag er
+dus uit alsof de server kapot was in plaats van "u mist een tweede factor". De bestaande
+guardtest miste dit omdat hij de guard rechtstreeks aanroept en alleen toetst _dát_ hij
+werpt. Nu vertaald naar 403.
+
+### B-11 — de bug die alleen een draaiende server laat zien
+
+`totp.ts` laadde otplib met `require('otplib')`. `apps/api` is een ESM-pakket; daar bestaat
+`require` niet. Elke TOTP-handeling wierp `ReferenceError: require is not defined` en werd
+een 500 — ook in productie. Geen enkele test zag dit, omdat de testrunner CJS-interop biedt
+en de servicetests de enige waren die deze code raakten. Nu `createRequire(import.meta.url)`,
+de ESM-manier om een CJS-module te laden; werkt in beide omgevingen.
+
+Dit is het duidelijkste argument uit deze hele ronde voor het draaien van de echte
+applicatie naast het draaien van de tests.
+
+### B-12/B-13 — CI stond al rood
+
+Bij het openen van de client bleek `npm run build:app` te falen op gecommit werk uit V02 en
+V04: een ontbrekende `FormsModule` (waardoor `ngModel` nergens bond), een aanroep naar een
+methode die niet bestond, en een template die `invoer.code` las waar `invoer` een signal was.
+Daarnaast stond `docs/besluiten.md` ongeformatteerd in de commit. Twee van de vijf
+CI-stappen faalden dus al, zonder dat dat ergens opviel — `tsc -b` dekt de Angular-templates
+niet, en daar werd kennelijk op gevaren. Beide rechtgezet; de reparaties zijn mechanisch,
+er is niets herontworpen.
+
+### Nieuwe test
+
+`apps/api/test/mfa-endpoints.e2e-spec.ts`, tien gevallen dwars door de echte Nest-keten:
+controller, guard, cookie, token. Inclusief het geval waar het om begon (geldstroomrecht
+dicht zonder factor, open met) en een test die vastlegt dat de poort bezit toetst en nog
+geen herauthenticatie (B-10) — zodat die aanname niet opnieuw stilzwijgend verkeerd gelezen
+wordt. Twee van deze tests faalden bij het schrijven en legden B-11 en de 500-bug bloot.

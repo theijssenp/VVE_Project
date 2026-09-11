@@ -14,7 +14,6 @@
 import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import {
-  IonBadge,
   IonButton,
   IonCard,
   IonCardContent,
@@ -50,7 +49,6 @@ function leegInvoer(): EenheidInvoer {
   standalone: true,
   imports: [
     FormsModule,
-    IonBadge,
     IonButton,
     IonCard,
     IonCardContent,
@@ -142,11 +140,16 @@ function leegInvoer(): EenheidInvoer {
           labelPlacement="stacked"
           fill="outline"
           name="code"
-          [(ngModel)]="invoer.code"
+          [(ngModel)]="invoerModel.code"
           required
         ></ion-input>
         <ion-item>
-          <ion-select label="Type" labelPlacement="stacked" name="type" [(ngModel)]="invoer.type">
+          <ion-select
+            label="Type"
+            labelPlacement="stacked"
+            name="type"
+            [(ngModel)]="invoerModel.type"
+          >
             @for (t of typen; track t) {
               <ion-select-option [value]="t">{{ t }}</ion-select-option>
             }
@@ -157,7 +160,7 @@ function leegInvoer(): EenheidInvoer {
           labelPlacement="stacked"
           fill="outline"
           name="gebouwNaam"
-          [(ngModel)]="invoer.gebouwNaam"
+          [(ngModel)]="invoerModel.gebouwNaam"
         ></ion-input>
         <ion-input
           label="Breukdeel teller"
@@ -165,7 +168,7 @@ function leegInvoer(): EenheidInvoer {
           fill="outline"
           type="number"
           name="breukdeelTeller"
-          [(ngModel)]="invoer.breukdeelTeller"
+          [(ngModel)]="invoerModel.breukdeelTeller"
         ></ion-input>
         <ion-input
           label="Breukdeel noemer"
@@ -173,7 +176,7 @@ function leegInvoer(): EenheidInvoer {
           fill="outline"
           type="number"
           name="breukdeelNoemer"
-          [(ngModel)]="invoer.breukdeelNoemer"
+          [(ngModel)]="invoerModel.breukdeelNoemer"
         ></ion-input>
         <ion-input
           label="Oppervlakte in m²"
@@ -181,7 +184,7 @@ function leegInvoer(): EenheidInvoer {
           fill="outline"
           type="number"
           name="oppervlakteM2"
-          [(ngModel)]="invoer.oppervlakteM2"
+          [(ngModel)]="invoerModel.oppervlakteM2"
         ></ion-input>
         <ion-button expand="block" [disabled]="bezig()" type="submit">Eenheid toevoegen</ion-button>
       </form>
@@ -195,7 +198,6 @@ export class EenhedenPage {
   readonly overzicht = signal<EenhedenOverzicht | null>(null);
   readonly fout = signal<ApiFout | null>(null);
   readonly bezig = signal(false);
-  readonly invoer = signal<EenheidInvoer>(leegInvoer());
   readonly typen = TYPEN;
 
   /** Zodat ngModel met nummerinvoer omgaat zonder lege-string-crashes. */

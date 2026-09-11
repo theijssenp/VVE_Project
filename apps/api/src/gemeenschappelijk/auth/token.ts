@@ -205,15 +205,22 @@ export function hashVanToken(token: string): string {
 export async function tekenAccessToken(
   persoonId: bigint,
   klok: Klok,
-  config: { geheim: string; minuten: number; vveId?: bigint | null },
+  config: { geheim: string; minuten: number; vveId?: bigint | null; mfa?: boolean },
 ): Promise<string> {
   const nu = klok.nu();
   const geheim = new TextEncoder().encode(config.geheim);
   const nuSec = Math.floor(nu.getTime() / 1000);
   // string is de veilige vorm voor een claim; sub heeft dezelfde behandeling.
-  const claims: Record<string, string> = { sub: String(persoonId) };
+  const claims: Record<string, string | boolean> = { sub: String(persoonId) };
   if (config.vveId !== undefined && config.vveId !== null) {
     claims['vve_id'] = String(config.vveId);
+  }
+  // De mfa-claim is een booleaanse markering en géén tekst: `verifieerAccessToken`
+  // leest hem als `mfaClaim === true`, zodat de string 'false' nooit per ongeluk
+  // voor waar doorgaat. Alleen aanwezig als hij waar is — een token zonder claim
+  // is een token zonder tweede factor.
+  if (config.mfa === true) {
+    claims['mfa'] = true;
   }
   return new SignJWT(claims)
     .setProtectedHeader({ alg: 'HS256', typ: 'JWT' })
@@ -303,6 +310,19 @@ export interface TokenService {
     persoonId: bigint,
     refreshToken: string,
     vveId: bigint,
+  ): Promise<{ accessToken: string }>;
+  /**
+   * Markeert de lopende sessie als MFA-geauthenticeerd en geeft een nieuw
+   * access-token uit mét de `mfa`-claim (§7.6, §8.5). De RolGuard laat de
+   * geldstroomrechten alleen door op zo'n token.
+   *
+   * De tweede factor zelf is hier al geverifieerd; deze methode kent alleen
+   * de sessie. De `vve_id`-claim van de sessie gaat mee, anders zou een
+   * step-up de tenantkeuze wissen en moest de gebruiker opnieuw kiezen.
+   */
+  markeerMfaGeauthenticeerd(
+    persoonId: bigint,
+    refreshToken: string,
   ): Promise<{ accessToken: string }>;
   trekSessieIn(sessieId: bigint): Promise<{ ingetrokken: boolean }>;
   /**
@@ -581,6 +601,37 @@ export function maakTokenService(config: TokenServiceConfig): TokenService {
     return { accessToken };
   }
 
+  async function markeerMfaGeauthenticeerd(
+    persoonId: bigint,
+    refreshToken: string,
+  ): Promise<{ accessToken: string }> {
+    const [sessie] = await config.db
+      .select({
+        id: apparaatSessie.id,
+        verlooptOp: apparaatSessie.verlooptOp,
+        actieveVveId: apparaatSessie.actieveVveId,
+      })
+      .from(apparaatSessie)
+      .where(
+        and(
+          eq(apparaatSessie.refreshTokenHash, hashVanToken(refreshToken)),
+          eq(apparaatSessie.persoonId, persoonId),
+          isNull(apparaatSessie.ingetrokkenOp),
+        ),
+      )
+      .limit(1);
+    if (sessie === undefined) throw new OnbekendTokenFout();
+    if (sessie.verlooptOp.getTime() <= klok.nu().getTime()) throw new VerlopenTokenFout();
+
+    const accessToken = await tekenAccessToken(persoonId, klok, {
+      geheim,
+      minuten: accessTokenMinuten,
+      vveId: sessie.actieveVveId,
+      mfa: true,
+    });
+    return { accessToken };
+  }
+
   async function trekSessieInViaToken(refreshToken: string): Promise<{ ingetrokken: boolean }> {
     const [geupdate] = await config.db
       .update(apparaatSessie)
@@ -619,6 +670,7 @@ export function maakTokenService(config: TokenServiceConfig): TokenService {
     geefTokensUit,
     verfris,
     kiesActieveVve,
+    markeerMfaGeauthenticeerd,
     trekSessieIn,
     trekSessieInViaToken,
     trekAlleSessiesIn,

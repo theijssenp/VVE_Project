@@ -65,6 +65,7 @@ import { AuthService, type Apparaat } from '../kern/auth.service.js';
       @if (heeftVveRol()) {
         <ion-button expand="block" routerLink="/vve">Mijn VvE</ion-button>
       }
+      <ion-button expand="block" fill="outline" routerLink="/beveiliging">Beveiliging</ion-button>
       <ion-button expand="block" fill="outline" (click)="uitloggen()">Uitloggen</ion-button>
     </ion-content>
   `,

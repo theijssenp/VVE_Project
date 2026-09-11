@@ -32,6 +32,13 @@ export const routes: Routes = [
     loadComponent: () => import('./portaal/portaal.page.js').then((m) => m.PortaalPage),
   },
   {
+    // Bereikbaar voor elke rol: de tweede factor is voor iedereen met
+    // geldhandelingen, en die zitten in alle drie de schillen.
+    path: 'beveiliging',
+    canActivate: [vereistSessie],
+    loadComponent: () => import('./beveiliging/beveiliging.page.js').then((m) => m.BeveiligingPage),
+  },
+  {
     path: 'vve',
     canActivate: [vereistSessie, vereistVveRol],
     loadComponent: () => import('./vve/vve-overzicht.page.js').then((m) => m.VveOverzichtPage),

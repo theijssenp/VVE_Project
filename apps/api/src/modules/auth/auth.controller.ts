@@ -42,6 +42,7 @@ import {
   type TokenService,
 } from '../../gemeenschappelijk/auth/token.js';
 import { SystemKlok } from '../../gemeenschappelijk/system-klok.js';
+import { maakMfaGate, type MfaGate } from '../../gemeenschappelijk/auth/mfa-gate.js';
 
 /** Naam van de cookie met het refresh-token. */
 const REFRESH_COOKIE = 'vve_refresh';
@@ -108,11 +109,13 @@ function tekst(waarde: unknown, veld: string): string {
 export class AuthController {
   readonly #tokens: TokenService;
   readonly #inlog: InlogService;
+  readonly #mfaGate: MfaGate;
 
   constructor(@Inject(DATABASE) db: NodePgDatabase) {
     const klok = new SystemKlok();
     this.#tokens = maakTokenService({ db, klok, refreshDagen: REFRESH_DAGEN });
     this.#inlog = maakInlogService({ db, tokens: this.#tokens, klok });
+    this.#mfaGate = maakMfaGate({ db });
   }
 
   @Post('inloggen')
@@ -135,7 +138,16 @@ export class AuthController {
         }),
       );
       antwoord.cookie(REFRESH_COOKIE, uit.refreshToken, cookieOpties(REFRESH_DAGEN * DAG_MS));
-      return { accessToken: uit.accessToken, mfaVereist: false };
+      // `mfaVereist` was een vaste `false`, waardoor de client zijn MFA-scherm
+      // nooit toonde en de tweede factor in de praktijk niet bestond (B-01/B-03).
+      // Nu het eerlijke antwoord: heeft dit account een tweede factor, dan is
+      // het zojuist uitgegeven token nog niet MFA-geauthenticeerd en moet de
+      // step-up nog volgen. Het token is verder gewoon bruikbaar — de MFA-eis
+      // hangt aan het recht, niet aan de sessie (§7.6).
+      return {
+        accessToken: uit.accessToken,
+        mfaVereist: await this.#mfaGate.heeftMfa(uit.persoonId),
+      };
     } catch (fout: unknown) {
       if (fout instanceof OnjuisteInloggegevensFout || fout instanceof AccountGeblokkeerdFout) {
         // Eén melding voor beide gevallen naar buiten (§7.6).

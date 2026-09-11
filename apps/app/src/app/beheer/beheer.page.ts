@@ -13,6 +13,7 @@
  */
 import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import {
   IonBadge,
   IonButton,
@@ -46,6 +47,7 @@ function leegBeheerder(): BeheerderInvoer {
   standalone: true,
   imports: [
     FormsModule,
+    RouterLink,
     IonBadge,
     IonButton,
     IonContent,
@@ -87,6 +89,13 @@ function leegBeheerder(): BeheerderInvoer {
           <ion-button size="small" fill="clear" (click)="uitgereikt.set(null)">Sluiten</ion-button>
         </div>
       }
+
+      <!--
+        De applicatiebeheerder draagt de zwaarste rechten (gebruikersrollen,
+        IBAN, incasso) en komt nooit op het portaal; zonder deze ingang zou hij
+        zijn tweede factor nergens kunnen instellen.
+      -->
+      <ion-button size="small" fill="outline" routerLink="/beveiliging">Beveiliging</ion-button>
 
       <h2>Nieuwe VvE</h2>
       <form (ngSubmit)="maakVve()">

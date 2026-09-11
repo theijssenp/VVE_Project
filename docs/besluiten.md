@@ -1932,6 +1932,68 @@ overgeslagen zonder de rest te blokkeren — AC13.2's wachtrij neemt de
 rest over.
 
 **`mededeling_doelgroep` was nieuw** (niet in 0001 — gecheckt, G08-les
-werkt): `mededeling_doelgroep` ('alle_leden','eigenaren','bewoners') in
-0024. Geen aparte bewoners-tabel: de doelgroep 'bewoners' is nu
+werkt): `mededeling_doelgroep` ('alle_leden','eigenaren','bewoners') in 0024. Geen aparte bewoners-tabel: de doelgroep 'bewoners' is nu
 "leden-min-eigenaren" en wordt exact zodra V03 de rol 'bewoner' inlevert.
+
+## F07 — MFA over HTTP (12-09-2026)
+
+### Waarom dit blok terugkwam nadat het `klaar` was
+
+De servicelaag van F07 was er en was getest, maar er was geen enkel endpoint: passkeys, TOTP
+en herstelcodes waren niet te activeren. Daarmee was élk recht uit `GELDSTROOM_RECHTEN` voor
+iedereen onbereikbaar, `boekjaar.afsluiten` voorop. De servicetests misten dat omdat ze de
+services rechtstreeks aanriepen. Zie het [controlelogboek](controle-logboek.md), B-01/B-02.
+
+### MFA is een step-up, geen inlogpoort
+
+Dat volgt uit §7.6: de eis hangt aan het _recht_, niet aan de sessie. Wie is ingelogd mag het
+portaal in; pas een geldstroomhandeling vraagt om de tweede factor. Het access-token draagt
+daarna een `mfa`-claim waarop de RolGuard doorlaat. Vandaar `markeerMfaGeauthenticeerd` op de
+tokenservice, naar het model van `kiesActieveVve`: de sessie wordt gecontroleerd, er komt een
+vers token uit, en de `vve_id`-claim gaat mee — anders zou een step-up de tenantkeuze wissen.
+
+De `mfa`-claim is een boolean en geen tekst. `verifieerAccessToken` leest hem als
+`mfaClaim === true`, zodat de string `'false'` nooit voor waar door kan gaan. Hij staat
+alleen in het token als hij waar is.
+
+### Alles achter de SessieGuard, ook de passkey-authenticatie
+
+De tweede factor volgt hier altijd op een geslaagde wachtwoordinlog, dus de persoon is al
+bekend. Dat scheelt het hele pad waarin een onbekende bezoeker WebAuthn-opties opvraagt — en
+dat is precies waar gebruikersopsomming op de loer ligt.
+
+### Het scherm staat niet op het portaal
+
+`/beveiliging` is een eigen route, bereikbaar vanaf alle drie de startschermen. Een sectie op
+het portaal zou de verkeerde mensen bedienen: dat is het scherm van de eigenaar, terwijl de
+applicatiebeheerder op `/beheer` landt en de VvE-beheerder op `/vve`. Juist die twee dragen
+de geldstroomrechten. Een instelling die alleen bereikbaar is voor wie hem niet nodig heeft,
+is geen instelling.
+
+### Het secret wordt één keer getoond
+
+Secret, otpauth-URI en tien herstelcodes komen één keer terug en staan daarna versleuteld
+respectievelijk gehasht in de database. Zelfde afspraak als bij de wachtwoorduitgifte in V01,
+en om dezelfde reden: zonder bruikbare mailflow is het scherm het enige kanaal. Let op de
+keerzijde, die in de code is vastgelegd: `activeer` zet MFA meteen aan, ook als de gebruiker
+het secret nooit in zijn app zet. Wegklikken zonder noteren betekent opnieuw activeren.
+
+### Twee bugs die alleen een draaiende server liet zien
+
+**`require` in een ESM-pakket.** `totp.ts` laadde otplib met een kale `require`. In het echte
+Node-proces bestaat die daar niet: elke TOTP-handeling wierp `ReferenceError` en werd een 500
+— ook in productie. Geen enkele test zag het, want de testrunner biedt CJS-interop. Nu
+`createRequire(import.meta.url)`.
+
+**De weigering was een 500.** `MfaVereistFout` viel als onbekende fout door de foutfilter en
+leverde een serverfout met referentienummer op, in plaats van een 403 met uitleg. De
+bestaande guardtest miste dat: die roept de guard rechtstreeks aan en toetst alleen dát hij
+werpt, niet wat de gebruiker ziet. Nu vertaald naar 403.
+
+### Wat F07 nog steeds niet doet
+
+De poort toetst _bezit_ van een tweede factor, niet of die zojuist gebruikt is: wie TOTP
+heeft geactiveerd komt er ook met een token van vóór de step-up langs. Dat is wat F07
+oplevert; herauthenticatie per handeling stond in de F07-code aangekondigd voor F08 en is
+daar niet gebouwd. Er staat nu een test die dit gedrag vastlegt, zodat de aanname niet
+opnieuw verkeerd gelezen wordt. Het echte werk hoort bij I03 (vier-ogen en herauthenticatie).

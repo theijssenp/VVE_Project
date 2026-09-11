@@ -8,6 +8,7 @@ import { BigIntInterceptor } from './gemeenschappelijk/bigint.interceptor.js';
 import { HttpFoutFilter } from './gemeenschappelijk/http-fout.filter.js';
 import { HealthController } from './modules/health/health.controller.js';
 import { AuthController } from './modules/auth/auth.controller.js';
+import { MfaController } from './modules/auth/mfa.controller.js';
 import { EenhedenController } from './modules/eenheden/eenheden.controller.js';
 import { FinancieelController } from './financieel/financieel.controller.js';
 import { BegrotingController } from './financieel/begroting.controller.js';
@@ -37,6 +38,7 @@ import { controleerRouteDeclaraties } from './gemeenschappelijk/auth/route-inven
 export const ALLE_CONTROLLERS = [
   HealthController,
   AuthController,
+  MfaController,
   VveController,
   EenhedenController,
   UitnodigingenController,

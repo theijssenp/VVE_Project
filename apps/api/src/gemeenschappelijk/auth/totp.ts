@@ -15,6 +15,7 @@
  * (text[]). Verbruikte codes worden uit de array verwijderd (§6.3).
  */
 
+import { createRequire } from 'node:module';
 import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'node:crypto';
 
 import { eq } from 'drizzle-orm';
@@ -84,13 +85,23 @@ interface Otplib {
 
 let otplibGelezen: Otplib | null = null;
 
+/**
+ * Otplib 13 is CJS met een dynamische plugin-API; een statische ESM-import van
+ * de CJS-bundel resolved niet betrouwbaar onder NodeNext. Laden gebeurt daarom
+ * op één plek, via `createRequire`.
+ *
+ * Dat laatste is niet cosmetisch. Hier stond een kale `require('otplib')`, en
+ * `apps/api` is een ESM-pakket (`"type": "module"`): in het echte Node-proces
+ * bestaat `require` daar niet en wierp elke TOTP-handeling een
+ * `ReferenceError`, die als 500 naar buiten kwam. De tests zagen dat niet — de
+ * testrunner biedt wél een CJS-interop — en de servicetests waren de enige die
+ * deze code raakten. Pas het draaien van de echte server bracht het aan het
+ * licht. `createRequire(import.meta.url)` is de ESM-manier om een CJS-module te
+ * laden en werkt in beide omgevingen.
+ */
 function otplib(): Otplib {
   if (otplibGelezen === null) {
-    // Otplib 13 is CJS met een dynamische plugin-API; een statische ESM-import
-    // van de CJS-bundel resolved niet betrouwbaar onder NodeNext. De require
-    // is hier bewust en centraal.
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    otplibGelezen = require('otplib') as Otplib;
+    otplibGelezen = createRequire(import.meta.url)('otplib') as Otplib;
   }
   return otplibGelezen;
 }

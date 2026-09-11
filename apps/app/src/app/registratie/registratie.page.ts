@@ -8,6 +8,7 @@
  * pad (§7.6) en kan een gedeelde computer niet half-ingedragen achterblijven.
  */
 import { Component, inject, signal } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import {
@@ -20,7 +21,7 @@ import {
   IonTitle,
   IonToolbar,
 } from '@ionic/angular';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 
 import type { ApiFout } from '../kern/fout.js';
 import { API_BASIS } from '../kern/tokens.js';
@@ -28,7 +29,17 @@ import { API_BASIS } from '../kern/tokens.js';
 @Component({
   selector: 'vve-registratie',
   standalone: true,
-  imports: [IonButton, IonContent, IonHeader, IonInput, IonNote, IonText, IonTitle, IonToolbar],
+  imports: [
+    FormsModule,
+    IonButton,
+    IonContent,
+    IonHeader,
+    IonInput,
+    IonNote,
+    IonText,
+    IonTitle,
+    IonToolbar,
+  ],
   template: `
     <ion-header
       ><ion-toolbar><ion-title>Account instellen</ion-title></ion-toolbar></ion-header
@@ -69,6 +80,7 @@ import { API_BASIS } from '../kern/tokens.js';
 })
 export class RegistratiePage {
   readonly #route = inject(ActivatedRoute);
+  readonly #router = inject(Router);
   readonly #http = inject(HttpClient);
   readonly #basis = inject(API_BASIS);
 
@@ -82,6 +94,11 @@ export class RegistratiePage {
     this.#route.queryParamMap.subscribe((params) => {
       this.token.set(params.get('token') ?? '');
     });
+  }
+
+  /** Na het instellen gaat de gebruiker gewoon door het normale inlogpad (§7.6). */
+  async naarInloggen(): Promise<void> {
+    await this.#router.navigate(['/inloggen']);
   }
 
   async registreer(): Promise<void> {

@@ -53,6 +53,18 @@ export interface Profiel {
   readonly vves: readonly ProfielVve[];
 }
 
+export interface MfaStatus {
+  readonly actief: boolean;
+  readonly totp: boolean;
+  readonly passkeys: number;
+}
+
+export interface TotpActivatie {
+  readonly secret: string;
+  readonly otpauth: string;
+  readonly herstelcodes: readonly string[];
+}
+
 export interface Apparaat {
   readonly sessieId: string;
   readonly platform: string | null;
@@ -103,16 +115,35 @@ export class AuthService {
     this.mfaVereist.set(antwoord.mfaVereist === true);
   }
 
-  async verifieerTweedeFactor(code: string): Promise<void> {
+  /**
+   * Wisselt de tweede factor in voor een access-token mét de `mfa`-claim.
+   * Een herstelcode gaat langs hetzelfde endpoint in een ander veld — dat is
+   * het pad voor wie zijn telefoon kwijt is.
+   */
+  async verifieerTweedeFactor(code: string, soort: 'code' | 'herstelcode' = 'code'): Promise<void> {
     const antwoord = await firstValueFrom(
       this.#http.post<InlogAntwoord>(
         `${this.#basis}/auth/mfa`,
-        { code },
+        soort === 'herstelcode' ? { herstelcode: code } : { code },
         { withCredentials: true },
       ),
     );
     this.#access.zet(antwoord.accessToken);
     this.mfaVereist.set(false);
+  }
+
+  /** Status van de tweede factor voor het profielscherm. */
+  mfaStatus(): Promise<MfaStatus> {
+    return firstValueFrom(this.#http.get<MfaStatus>(`${this.#basis}/auth/mfa`));
+  }
+
+  /**
+   * Zet TOTP aan. Het secret en de herstelcodes komen hier één keer langs en
+   * worden nergens bewaard — net als het wachtwoord bij het aanmaken van een
+   * beheerder (V01). Wie ze niet noteert, moet opnieuw activeren.
+   */
+  activeerTotp(): Promise<TotpActivatie> {
+    return firstValueFrom(this.#http.post<TotpActivatie>(`${this.#basis}/auth/mfa/totp`, {}));
   }
 
   /**

@@ -24,16 +24,20 @@ import type { ApiFout } from '../kern/fout.js';
       ><ion-toolbar><ion-title>Tweede factor</ion-title></ion-toolbar></ion-header
     >
     <ion-content class="ion-padding">
-      <p>Voer de zescijferige code uit uw authenticator-app in.</p>
+      @if (herstelmodus()) {
+        <p>Voer een van uw herstelcodes in. Elke code werkt één keer.</p>
+      } @else {
+        <p>Voer de zescijferige code uit uw authenticator-app in.</p>
+      }
       <form (ngSubmit)="verstuur()">
         <ion-input
-          label="Code"
+          [label]="herstelmodus() ? 'Herstelcode' : 'Code'"
           labelPlacement="stacked"
           fill="outline"
-          inputmode="numeric"
+          [inputmode]="herstelmodus() ? 'text' : 'numeric'"
           name="code"
           autocomplete="one-time-code"
-          maxlength="6"
+          [maxlength]="herstelmodus() ? 32 : 6"
           [(ngModel)]="code"
         ></ion-input>
         @if (fout(); as f) {
@@ -53,6 +57,14 @@ import type { ApiFout } from '../kern/fout.js';
         <button type="submit" tabindex="-1" aria-hidden="true" style="display: none"></button>
         <ion-button expand="block" type="submit" [disabled]="bezig()">Bevestigen</ion-button>
       </form>
+
+      <!--
+        Wie zijn telefoon kwijt is, komt er anders niet meer in. De herstelcodes
+        zijn bij het instellen één keer getoond; ze werken elk één keer.
+      -->
+      <ion-button expand="block" fill="clear" (click)="wisselSoort()">
+        {{ herstelmodus() ? 'Toch een code uit de app' : 'Ik gebruik een herstelcode' }}
+      </ion-button>
     </ion-content>
   `,
 })
@@ -61,14 +73,24 @@ export class MfaPage {
   readonly #router = inject(Router);
 
   code = '';
+  readonly herstelmodus = signal(false);
   readonly bezig = signal(false);
   readonly fout = signal<ApiFout | null>(null);
+
+  wisselSoort(): void {
+    this.herstelmodus.update((aan) => !aan);
+    this.code = '';
+    this.fout.set(null);
+  }
 
   async verstuur(): Promise<void> {
     this.bezig.set(true);
     this.fout.set(null);
     try {
-      await this.#auth.verifieerTweedeFactor(this.code);
+      await this.#auth.verifieerTweedeFactor(
+        this.code,
+        this.herstelmodus() ? 'herstelcode' : 'code',
+      );
       this.code = '';
       await this.#router.navigate([startRoute(await this.#auth.laadProfiel())]);
     } catch (fout: unknown) {
