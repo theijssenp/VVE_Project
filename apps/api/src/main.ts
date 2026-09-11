@@ -13,6 +13,7 @@ import { FinancieelController } from './financieel/financieel.controller.js';
 import { BegrotingController } from './financieel/begroting.controller.js';
 import { BijdrageController } from './financieel/bijdrage.controller.js';
 import { NotaController } from './financieel/nota.controller.js';
+import { NotaVerzendController } from './financieel/nota-verzend.controller.js';
 import { UitnodigingenController } from './modules/uitnodigingen/uitnodigingen.controller.js';
 import { VerdeelsleutelController } from './financieel/verdeelsleutel.controller.js';
 import { VveController } from './modules/vve/vve.controller.js';
@@ -39,6 +40,7 @@ export const ALLE_CONTROLLERS = [
   BegrotingController,
   BijdrageController,
   NotaController,
+  NotaVerzendController,
 ];
 
 export async function bootstrap(): Promise<void> {

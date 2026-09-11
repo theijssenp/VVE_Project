@@ -1763,7 +1763,7 @@ ontstaan alsnog dubbele periode-nota's. Deze volgorde is de kern van test
 #10, niet de nummering zelf.
 
 **Tweede verdeling van §5.3 op de juiste plek.** Het bijdrageschema bewaart
-jaarbedragen; de nota-verdeling verdeelt het *componentgewijs* — exploitatie
+jaarbedragen; de nota-verdeling verdeelt het _componentgewijs_ — exploitatie
 en reserve elk apart over N perioden met de grootste-restmethode. Daardoor
 krijgt index 0 in elk component het restcent (16.667+16.667+8.334+8.334 +
 4×8.334 = 83.338 bij de test-inkomst). Verwachtingen in de test zijn tegen
@@ -1778,3 +1778,33 @@ betalingswijze default 'overboeking', incasso (AC8.3) zet 'incasso' in M8.
 exploitatieverdeling en dat van de reserve verhouden zich tot hun eigen
 totalen, niet tot de combinatie — dit sluit aan bij de aparte §5.3-
 verdelingen van G05 en houdt de exploitatie/reserve-splitsing exact.
+
+---
+
+## G07 — Nota-PDF en verzending (11-09-2026)
+
+**PDF in de database, niet op het bestandssysteem.** `pdf_document` bewaart
+de bytes (bytea, migratie 0020); AC13.5 ("inclusief het verzonden
+PDF-bestand — bewijslast bij aanmaningen") hoort bij het dossier. De nota
+koppelt via het bestaande `pdf_document_id` uit 0019.
+
+**Dependency-vrije PDF (nota-pdf.ts).** Een minimale PDF 1.4-schrijver:
+één A4-pagina, base-14-fonts (Helvetica/Bold), WinAnsi. De spec-eis is een
+leesbaar bewijsstuk met nummer, kenmerk, specificatie exploitatie/reserve,
+vervaldatum — geen typografie. Tekens buiten WinAnsi vallen bewust weg naar
+'?' (inhoud exact, tekenset beperkt). De xref-tabel wordt handmatig
+opgebouwd; de test leest de bytes terug en controleert %PDF-kop, %%EOF,
+kenmerk en totalen in de inhoudsstroom.
+
+**Postlijst via communicatie_wijze, niet via een lege e-mail.** Eerste
+aanpak (e-mail `''` bij persoon) botste tegen de UNIQUE-constraint op citext
+— en was sowieso het verkeerde veld. Het datamodel heeft al
+`communicatie_wijze` ('email'/'post'/'beide', migratie 0001): de
+verzend-service behandelt `communicatie_wijze = 'post'` als AC13.4-postlijst.
+De test seedt twee eigenaren, één met 'post'.
+
+**Geen dubbelt op drie niveaus.** (1) `verzonden_op` op de nota bewaakt de
+serie (tweede run = 0 verzendingen, getest); (2) de F10-wachtrij-claim
+(§7.7) voorkomt dubbelt per bericht; (3) auditlog noteert elke
+serie-verzending. De PDF wordt bij verzending *vers* gebouwd en bewaard —
+het bewijs hoort bij het verzendmoment, niet bij een oude concept-PDF.

@@ -44,6 +44,7 @@ export { begroting, begrotingsregel } from './begroting.js';
 export { sepaMachtiging } from './sepa-machtiging.js';
 export { bijdrageSchema, bijdrageRegel } from './bijdrage.js';
 export { nota, notaRegel } from './nota.js';
+export { pdfDocument } from './pdf-document.js';
 export type { Vve, NieuweVve } from './vve.js';
 export type { Persoon, NieuwePersoon } from './persoon.js';
 export type { RolToewijzing, NieuweRolToewijzing } from './rol-toewijzing.js';
@@ -78,3 +79,4 @@ export type {
   NieuwBijdrageRegel,
 } from './bijdrage.js';
 export type { Nota, NieuweNota, NotaRegel, NieuweNotaRegel } from './nota.js';
+export type { PdfDocument, NieuwPdfDocument } from './pdf-document.js';
