@@ -143,6 +143,13 @@ export const verplichtingSoort = pgEnum('verplichting_soort', [
   'overig',
 ] as const);
 
+// Blok A06: mededelingen (M13 `mededeling_doelgroep`, nieuw in 0024).
+export const mededelingDoelgroep = pgEnum('mededeling_doelgroep', [
+  'alle_leden',
+  'eigenaren',
+  'bewoners',
+] as const);
+
 // Blok G06: nota's (§6.1 `nota_type`, `nota_status`, `betaalwijze`).
 export const notaType = pgEnum('nota_type', [
   'periodieke_bijdrage',

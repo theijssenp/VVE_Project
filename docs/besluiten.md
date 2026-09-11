@@ -1913,3 +1913,25 @@ einddatum+30 (signaal aan) tegenover een ver contract (uit).
 G06-kosten-nota (nummerreeks, grootboekrekening); de MJOP/melding-koppeling
 volgt in M01/A04. De migratie laat die kolommen bewust weg in plaats van
 dode FK's — vooruitverwijzingen horen bij het blok dat ze invult.
+
+---
+
+## A06 — Mededelingen en mailsjablonen (11-09-2026)
+
+**Doelgroepen live opgemaakt, niet voorgecreëerd (AC13.1).** De
+ontvangerslijst van een mededeling wordt per publicatie opgemaakt:
+alle_leden = iedereen met een lopende rol_toewijzing; eigenaren = via
+eigenaarschap op vandaag (daterange); bewoners = de rest. Geen
+mededeling_ontvanger-tabel — de doelgroep van het verleden verandert niet
+door later gewijzigde rollen, want de mail staat al in de wachtrij (§7.7).
+
+**Sjabloonfout blokkeert nooit (AC13.3).** Het sjabloon is één rij per VvE
+(afzendernaam, ondertekening, logo); zonder rij is `isDefault` waar en
+valt de afzender terug op 'De VvE'. Per-ontvanger-fouten worden
+overgeslagen zonder de rest te blokkeren — AC13.2's wachtrij neemt de
+rest over.
+
+**`mededeling_doelgroep` was nieuw** (niet in 0001 — gecheckt, G08-les
+werkt): `mededeling_doelgroep` ('alle_leden','eigenaren','bewoners') in
+0024. Geen aparte bewoners-tabel: de doelgroep 'bewoners' is nu
+"leden-min-eigenaren" en wordt exact zodra V03 de rol 'bewoner' inlevert.

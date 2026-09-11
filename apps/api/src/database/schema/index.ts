@@ -27,6 +27,7 @@ export {
   aanmaningStap,
   renteGrondslag,
   verplichtingSoort,
+  mededelingDoelgroep,
 } from './enums.js';
 export { citext, bytea } from './types.js';
 export { vve } from './vve.js';
@@ -52,6 +53,7 @@ export { pdfDocument } from './pdf-document.js';
 export { betaling, betalingKoppeling } from './betaling.js';
 export { aanmaning, aanmaningInstelling } from './aanmaning.js';
 export { leverancier, leverancierContract, verplichting } from './leverancier.js';
+export { mededeling, mailSjabloon } from './mededeling.js';
 export type { Vve, NieuweVve } from './vve.js';
 export type { Persoon, NieuwePersoon } from './persoon.js';
 export type { RolToewijzing, NieuweRolToewijzing } from './rol-toewijzing.js';
@@ -107,3 +109,9 @@ export type {
   Verplichting,
   NieuweVerplichting,
 } from './leverancier.js';
+export type {
+  Mededeling,
+  NieuweMededeling,
+  MailSjabloon,
+  NieuwMailSjabloon,
+} from './mededeling.js';
