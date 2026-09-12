@@ -22,6 +22,7 @@ import { LeverancierController } from './financieel/leverancier.controller.js';
 import { MededelingController } from './financieel/mededeling.controller.js';
 import { EigenaarschapController } from './financieel/eigenaarschap.controller.js';
 import { DocumentenController } from './financieel/documenten.controller.js';
+import { PortaalController } from './modules/portaal/portaal.controller.js';
 import { UitnodigingenController } from './modules/uitnodigingen/uitnodigingen.controller.js';
 import { VerdeelsleutelController } from './financieel/verdeelsleutel.controller.js';
 import { VveController } from './modules/vve/vve.controller.js';
@@ -57,6 +58,7 @@ export const ALLE_CONTROLLERS = [
   MededelingController,
   EigenaarschapController,
   DocumentenController,
+  PortaalController,
 ];
 
 export async function bootstrap(): Promise<void> {

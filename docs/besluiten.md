@@ -2137,3 +2137,41 @@ Rol `bewoner` in de import volgt later (AC2.6-register); de kolommen `eigenaar_*
 nu eigenaar-only. XLSX-sheets vóór sheet1, datumceltypen en formules worden bewust niet
 gelezen — het import-model is de CSV-kolomlijst; wie meer nodig heeft exporteert CSV.
 De client-kant van de documenten volgt in V07 (eigenaarsportaal).
+
+## V07 — Eigenaarsportaal (12-09-2026)
+
+### Eigenaar-zicht, niet bestuur-zicht
+
+Het overzicht retourneert uitsluitend de eenheden waar de opvrager *zelf* een lopende
+eigenaarsperiode voor heeft (`periode @> current_date` op persoonId). De RLS-policy
+filtert op VvE, niet op persoon — het eigenaar-zicht is daarom een expliciete WHERE,
+net als de seed-scope-regel in de tests. Een bewoner/zonder-eigenaarschap ziet een
+lege lijst, geen andermans eenheden.
+
+### E-mailwijziging hoort bewust niet bij AC14.3 in dit blok
+
+De spec eist verificatie van het nieuwe adres. Dat is een eigen flow (opak token naar
+het nieuwe adres, consumeerbaar zonder lopende sessie) en hoort bij het blok dat die
+verificatie uitwerkt — niet als stil side-effect in het profiel-PATCH. De e-mail is
+in het portaal leesbaar, nooit schrijfbaar; de PATCH-schema is `.strict()` en negeert
+een `email`-veld met een foutmelding (mass-assignment-wachter, test #30).
+
+### Het portaal is een leesvenster, geen bron van waarheid
+
+Openstaande saldo's, creditsaldi en betalingen worden live gerekend uit de G06/G08-
+tabellen (zelfde SQL als debiteuren/betalingen), nooit opgeslagen. Een tweede
+berekening met dezelfde peildatum is identiek — daarom is er ook geen portaal-tabel.
+
+### Client rekent nooit met centen (F12-discipline)
+
+De centen-wachter staat ook op `apps/app`. De portaal-pagina formatteert via één
+`euro(centen)`-helper; er is geen `+`/`-` op een veld met `_cent`-naam. De API levert
+rauw (centen + metadata); de presentatie is clientwerk.
+
+### Wat V07 bewust niet doet
+
+AC14.4 (jaaropgave-PDF) volgt bij het verzend-/jaarrekening-blok (G08-data, G13-PDF-
+patroon); "komende ALV met stukken" volgt bij A01 (de vergaderingstabel bestaat nog
+niet); "actieve meldingen" volgt bij A04. De machtiging (M8/I02) komt met het incasso-
+spoor. AC14.2 (VvE-wissel zonder opnieuw inloggen) is al werkend uit F08: POST
+/auth/actieve-vve + VvE-keuzescherm; het portaal vertrouwt op de actieve VvE-claim.
