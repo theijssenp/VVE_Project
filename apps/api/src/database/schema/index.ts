@@ -50,6 +50,7 @@ export { sepaMachtiging } from './sepa-machtiging.js';
 export { bijdrageSchema, bijdrageRegel } from './bijdrage.js';
 export { nota, notaRegel } from './nota.js';
 export { pdfDocument } from './pdf-document.js';
+export { document } from './document.js';
 export { betaling, betalingKoppeling } from './betaling.js';
 export { aanmaning, aanmaningInstelling } from './aanmaning.js';
 export { leverancier, leverancierContract, verplichting } from './leverancier.js';
@@ -89,6 +90,7 @@ export type {
 } from './bijdrage.js';
 export type { Nota, NieuweNota, NotaRegel, NieuweNotaRegel } from './nota.js';
 export type { PdfDocument, NieuwPdfDocument } from './pdf-document.js';
+export type { Document, NieuwDocument } from './document.js';
 export type {
   Betaling,
   NieuweBetaling,

@@ -169,3 +169,11 @@ export const notaStatus = pgEnum('nota_status', [
   'oninbaar',
 ] as const);
 export const betaalwijze = pgEnum('betaalwijze', ['incasso', 'overboeking'] as const);
+
+// Blok V05: documenten (M3; enum `zichtbaarheid` uit 0001 — spiegel).
+export const zichtbaarheid = pgEnum('zichtbaarheid', [
+  'alle_leden',
+  'bewoners',
+  'bestuur',
+  'alleen_beheerder',
+] as const);

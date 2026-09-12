@@ -2047,3 +2047,58 @@ bewaakt alleen het toevoegen). Bulk-import en de CSV-flow horen bij V06; de nota
 van het verrekenoverzicht volgt bij het verzend-blok (G13-patroon, datastructuur eerst).
 Huurders/bewoners (AC2.6) zijn een apart register en horen bij het blok dat hun beperkte
 toegang uitwerkt.
+
+## V05 — Documenten (12-09-2026)
+
+### Opslag: bestandssysteem, niet de database — andersom dan G07
+
+AC3.7 zegt het letterlijk: willekeurige (UUID) namen op schijf, buiten de webroot,
+originele naam in de database. G07 bewaart de nota-PDF bewust als bytea in de db
+(bewijslast bij het dossier); hier is het bestandssysteem de bewaarplaats. Het pad in
+de database is **relatief** aan de opslagroot (`DOCUMENTEN_MAP`, verplicht uit de
+omgeving, geen standaardwaarde — §8.2): de root verhuist mee met de omgeving zonder
+dat de database het hoeft te weten.
+
+### MIME server-side via magic bytes (test #31)
+
+`fileTypeFromBuffer` uit `file-type` (nu expliciete dependency, was transitief) bepaalt
+het type uit de inhoud — een uitvoerbaar bestand onder een `.pdf`-naam wordt geweigerd op
+het gedetecteerde type, niet op de naam. De test seedt echte magic bytes (M\u005a-header
+voor de weigering, volledige PNG-header mét IHDR-chunk voor de toelating: file-type 21
+herkent de kop alleen met het eerste chunk erachter).
+
+### Zichtbaarheid: de bewoner-bepaling gaat voor `alle_leden` (AC3.2)
+
+AC3.2: huurders/bewoners zien uitsluitend documenten die expliciet als `bewoners`-
+zichtbaar zijn gemarkeerd. Een bewoner is dus géén "lid" in de zin van `alle_leden` —
+de regels staan in `zichtBepalerVanRollen` (export, één bron van waarheid): bestuur
+ziet alles, een bewoner-zonder-eigenaarsrol uitsluitend 'bewoners', andere leden
+'alle_leden'. De controller leest de rollen uit `rol_toewijzing` op de actieve VvE —
+nooit uit de client.
+
+### Versieketen als gelinkte lijst (AC3.3)
+
+Een nieuwe versie verwijst via `eerdere_versie_id` naar de rij die hij vervangt, draait
+versie+1 en zet de oude op `vervallen_op` (zichtbaar voor bestuur, weg uit de
+standaardlijst). De metadata (titel, categorie, zichtbaarheid, tags) wordt van de oude
+versie overgenomen — alleen de inhoud wisselt. Een vervallen versie kan niet nogmaals
+vervangen worden (weigering).
+
+### Twee klassiekers opnieuw ondervangen
+
+**Seed-lookups met vve_id-scope.** De eerste lijst-query filterde alleen op
+categorie/jaar — de gedeelde testcontainer-pool verbindt als superuser (BYPASSRLS), dus
+lekte de lijst over VvE's heen en zag de beheerders-assert er één te veel. Nu staat
+`eq(document.vveId, vveId)` in de WHERE, zoals in élke andere suite.
+
+**Download is 404, niet 403** (§7.5 stap 6): bestaan is zelf al informatie; een
+onzichtbaar document levert dezelfde fout als een onbekend document.
+
+### Wat V05 bewust niet doet
+
+De ZIP-download (AC3.6) levert nu de kandidatenlijst (gededupliceerde namen); het echte
+dependency-vrije ZIP-formaat volgt het G07-PDF-patroon in het verzend-blok. PDF-tekst-
+extractie en volledig-tekstzoeken over de inhoud is X03 (fase 7); het zoeken hier werkt
+op titel, categorie, jaar en tags. ALV- en MJOP-koppelingen (AC3.4) zijn plain kolommen —
+ze krijgen hun FK bij de blokken die die tabellen leveren (A05-patroon: geen dode FK's).
+De client-kant van de documenten volgt in V07 (eigenaarsportaal).
