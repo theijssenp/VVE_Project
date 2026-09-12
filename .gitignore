@@ -16,3 +16,6 @@ storage/
 
 # Angular-bouwcache
 .angular/
+
+# Lokale documentopslag (V05); de inhoud hoort nooit in git.
+var/
