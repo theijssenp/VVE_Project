@@ -1,0 +1,134 @@
+/**
+ * Proefbalans, saldibalans en grootboek — endpoints van blok B07 (M9 · AC9.8).
+ *
+ * Drie routes die samen het auditspoor vormen, elk een stap fijner:
+ * de balans over alle rekeningen, het grootboek van één rekening, en de
+ * boeking achter één mutatie mét de verwijzing naar de bron.
+ *
+ * Alles is lezen. Er staat dan ook geen geldstroomrecht op: `boekhouding.lezen`
+ * valt buiten `GELDSTROOM_RECHTEN`, want meekijken in de cijfers is precies wat
+ * een kascommissie moet kunnen zonder tweede factor (§8.5 beschermt het
+ * *muteren* van geld, niet het inzien ervan).
+ */
+import {
+  BadRequestException,
+  Controller,
+  ForbiddenException,
+  Get,
+  Inject,
+  NotFoundException,
+  Param,
+  Query,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
+import type { Request } from 'express';
+import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
+
+import { DATABASE } from '../database/database.module.js';
+import { VereistRecht } from '../gemeenschappelijk/auth/vereist-recht.js';
+import { RolSessieGuard, TenantSessieGuard } from '../gemeenschappelijk/auth/tenant-guards.js';
+import { SessieGuard } from '../modules/auth/sessie.guard.js';
+import { NietGevondenFout } from './boekhouding.js';
+import {
+  maakBalansService,
+  type BalansService,
+  type BoekingDetail,
+  type GrootboekWeergave,
+  type ProefSaldiBalans,
+} from './balans-service.js';
+
+interface MetInlog extends Request {
+  inlogContext?: { persoonId: bigint; vveId: bigint | null };
+}
+
+/** ISO-kalenderdatum; `date`-kolommen ondergaan nooit tijdzoneconversie (§5.8). */
+const DATUM = /^\d{4}-\d{2}-\d{2}$/;
+
+function idUit(waarde: string, veld: string): bigint {
+  if (!/^\d+$/.test(waarde)) throw new BadRequestException(`Ongeldig ${veld}.`);
+  return BigInt(waarde);
+}
+
+@Controller('financieel')
+@UseGuards(SessieGuard, TenantSessieGuard, RolSessieGuard)
+export class BalansController {
+  readonly #balans: BalansService;
+
+  constructor(@Inject(DATABASE) db: NodePgDatabase) {
+    this.#balans = maakBalansService({ db });
+  }
+
+  #eisTenant(verzoek: MetInlog): bigint {
+    const inlog = verzoek.inlogContext;
+    if (inlog === undefined || inlog.vveId === null) {
+      throw new ForbiddenException('Geen actieve VvE in de sessie.');
+    }
+    return inlog.vveId;
+  }
+
+  /** De servicefouten kennen geen HTTP; hier pas de vertaling. */
+  #alsHttp(fout: unknown): never {
+    if (fout instanceof NietGevondenFout) throw new NotFoundException(fout.message);
+    throw fout;
+  }
+
+  /**
+   * Proef- en saldibalans over een boekjaar. `peildatum` beperkt tot boekingen
+   * tot en met die dag — nodig voor een tussentijdse stand, bijvoorbeeld voor
+   * de kascommissie halverwege het jaar.
+   */
+  @Get('proefbalans/:boekjaarId')
+  @VereistRecht('boekhouding.lezen')
+  async proefbalans(
+    @Req() verzoek: MetInlog,
+    @Param('boekjaarId') boekjaarId: string,
+    @Query('peildatum') peildatum?: string,
+  ): Promise<ProefSaldiBalans> {
+    const vveId = this.#eisTenant(verzoek);
+    if (peildatum !== undefined && peildatum !== '' && !DATUM.test(peildatum)) {
+      throw new BadRequestException('peildatum moet de vorm YYYY-MM-DD hebben.');
+    }
+    try {
+      return await this.#balans.proefSaldiBalans(
+        vveId,
+        idUit(boekjaarId, 'boekjaar-id'),
+        peildatum === undefined || peildatum === '' ? null : peildatum,
+      );
+    } catch (fout: unknown) {
+      return this.#alsHttp(fout);
+    }
+  }
+
+  /** De mutaties van één rekening, chronologisch, met lopend saldo. */
+  @Get('grootboek/:boekjaarId/:rekeningId')
+  @VereistRecht('boekhouding.lezen')
+  async grootboek(
+    @Req() verzoek: MetInlog,
+    @Param('boekjaarId') boekjaarId: string,
+    @Param('rekeningId') rekeningId: string,
+  ): Promise<GrootboekWeergave> {
+    const vveId = this.#eisTenant(verzoek);
+    try {
+      return await this.#balans.grootboek(
+        vveId,
+        idUit(boekjaarId, 'boekjaar-id'),
+        idUit(rekeningId, 'rekening-id'),
+      );
+    } catch (fout: unknown) {
+      return this.#alsHttp(fout);
+    }
+  }
+
+  /** De laatste stap van AC9.8: de boeking zelf, met bron en bron-id. */
+  @Get('boeking/:id')
+  @VereistRecht('boekhouding.lezen')
+  async boeking(@Req() verzoek: MetInlog, @Param('id') id: string): Promise<BoekingDetail> {
+    const vveId = this.#eisTenant(verzoek);
+    try {
+      return await this.#balans.boekingDetail(vveId, idUit(id, 'boeking-id'));
+    } catch (fout: unknown) {
+      return this.#alsHttp(fout);
+    }
+  }
+}

@@ -2175,3 +2175,47 @@ patroon); "komende ALV met stukken" volgt bij A01 (de vergaderingstabel bestaat 
 niet); "actieve meldingen" volgt bij A04. De machtiging (M8/I02) komt met het incasso-
 spoor. AC14.2 (VvE-wissel zonder opnieuw inloggen) is al werkend uit F08: POST
 /auth/actieve-vve + VvE-keuzescherm; het portaal vertrouwt op de actieve VvE-claim.
+
+## B07 — Proefbalans, saldibalans en grootboek (12-09-2026)
+
+### Eén overzicht, geen twee
+
+Proef- en saldibalans staan in de Nederlandse praktijk naast elkaar in één
+vierkolommenoverzicht: per rekening de optelling debet en credit (de proef), en daarnaast
+het saldo aan de kant waar het uitkomt (de saldi). Daarom één methode
+`proefSaldiBalans` en niet twee. Een rekening met 25.000 debet en 12.500 credit houdt dus
+twee tellingen maar één saldo van 12.500 debet; de creditkolom blijft leeg. Daar staat een
+test op, want dat verschil is precies wat de twee begrippen onderscheidt.
+
+### De controle die het overzicht zijn naam geeft
+
+G02 bewaakt de balans per boeking, met `OnbalansFout` vóór het schrijven en de deferred
+trigger als vangnet daaronder. Dat is de controle op het **schrijven**. `inBalans` is de
+controle op het **lezen**, over het hele boekjaar heen, en vangt wat de eerste niet kan
+vangen: een regel die buiten de boekingsservice om is aangepast, of een migratie die iets
+heeft gebroken. Het wordt nageteld, niet aangenomen — en de test telt het op zijn beurt
+met de hand na in plaats van `inBalans` te geloven omdat de service het zegt.
+
+### Rekeningen zonder mutaties blijven staan
+
+Een lege regel in de proefbalans is informatie: "hier is niets op geboekt". Wegfilteren
+zou de lezer laten raden of de rekening niet bestaat of niet gebruikt is.
+
+### Sorteren op datum, niet op id
+
+Het grootboek sorteert op `datum`, dan `nummer`, dan regel-id. Sorteren op id alleen zou
+een memoriaalboeking met terugwerkende datum onderaan zetten, en dan klopt het lopende
+saldo in beeld niet met de volgorde die de lezer ziet.
+
+### Geen geldstroomrecht op deze routes
+
+`boekhouding.lezen` staat bewust niet in `GELDSTROOM_RECHTEN`. §8.5 beschermt het _muteren_
+van geld; meekijken in de cijfers is juist wat een kascommissie moet kunnen zonder tweede
+factor.
+
+### Bedragen als getal, niet als `Bedrag`
+
+De optelling gebeurt in SQL (`sum` over `bigint`-centen) en wat eruit komt wordt alleen nog
+getoond. Zodra er weer mee gerekend wordt — de jaarrekening van B08 — hoort het via
+`Bedrag` te gaan (§7.3). Dat staat als opmerking in de kop van de service, zodat B08 het
+niet per ongeluk overneemt.
