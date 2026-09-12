@@ -40,7 +40,7 @@
             <Refs><EndToEndId>NOTA2026000123</EndToEndId></Refs>
             <RltdPties>
               <Dbtr><Nm>J. de Vries</Nm></Dbtr>
-              <DbtrAcct><Id><IBAN>NL91INGB0001234567</IBAN></Id></DbtrAcct>
+              <DbtrAcct><Id><IBAN>NL20INGB0001234567</IBAN></Id></DbtrAcct>
             </RltdPties>
             <RmtInf>
               <Ustrd>Bijdrage maart 2026</Ustrd>
@@ -60,7 +60,7 @@
           <TxDtls>
             <RltdPties>
               <Cdtr><Nm>Liftservice Noord B.V.</Nm></Cdtr>
-              <CdtrAcct><Id><IBAN>NL44RABO0987654321</IBAN></Id></CdtrAcct>
+              <CdtrAcct><Id><IBAN>NL93RABO0987654321</IBAN></Id></CdtrAcct>
             </RltdPties>
             <RmtInf><Ustrd>Onderhoudscontract lift Q1</Ustrd></RmtInf>
           </TxDtls>

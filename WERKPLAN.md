@@ -85,7 +85,7 @@ Alles in deze fase werkt zónder incasso. Het betalingskenmerk op de nota is hie
 | ID | Blok | Omvang | Na | Spec | Status |
 |---|---|---|---|---|---|
 | B01 | IBAN-versleuteling: AES-256-GCM, HMAC-zoeksleutel, masker, sleutelversie, rotatietaak | M | F03 | §6.2 | **klaar** |
-| B02 | CAMT.053-parser met fixtures, duplicaatdetectie, saldocontinuïteit | L | B01 | §10 · tests 11–12 | todo |
+| B02 | CAMT.053-parser met fixtures, duplicaatdetectie, saldocontinuïteit | L | B01 | §10 · tests 11–12 | **klaar** |
 | B03 | MT940-parser voor ING en Rabobank, genormaliseerd naar hetzelfde model | M | B02 | §10 · test 14 | todo |
 | B04 | CSV-bankprofielen met kolommapping en encodingdetectie | M | B02 | §10 · AC7.1 | todo |
 | B05 | Matchingmotor (kenmerk → E2E → IBAN-HMAC → FIFO → leverancier), werkbak, opslaanbare boekingsregels | L | B02, G08 | M7 · test 13, AC7.4–7.5 | todo |
@@ -180,7 +180,7 @@ AES-GCM.
 | | Aantal |
 |---|---|
 | Blokken totaal | 71 |
-| Klaar | 37 |
+| Klaar | 38 |
 | Bezig | 0 |
 
 Statuswaarden: `todo` · `bezig` · `klaar` · `overgeslagen`.

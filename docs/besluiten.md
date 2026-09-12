@@ -2346,3 +2346,57 @@ De kascommissie-verklaring heeft een expliciete `akkoord`-vlag náást de bevind
 commissie die bezwaren heeft tekent niet blind af, en de ALV moet dat verschil zien zonder
 eerst de bevindingen te hoeven lezen. Opnieuw tekenen overschrijft de eigen verklaring:
 dat is geen fout maar een herziening, bijvoorbeeld nadat een bevinding is opgelost.
+
+## B02 — Bankimport CAMT.053 (12-09-2026)
+
+### Eigen parser, geen bibliotheek
+
+De stacktabel noemt `fast-xml-parser`, maar §10 zegt er in dezelfde adem bij dat de CAMT-
+en MT940-verwerking als **eigen domeincode** behandeld moet worden. Daar komt bij dat
+`packages/domein` per §7.2 puur is en tot dit blok nul afhankelijkheden had. Een
+bankafschrift is bovendien geen willekeurige XML maar een strak omschreven document.
+Vandaar `bank/xml.ts`: elementen, attributen, tekst, CDATA, entiteiten.
+
+Bewust géén DTD's en géén externe entiteiten. Dat is geen gemak maar veiligheid: een
+bankbestand is invoer van buiten, en een parser die entiteiten uit bestanden of URL's
+oplost is een XXE-gat.
+
+### Duplicaatdetectie is een databasegarantie
+
+AC7.2 wordt een `UNIQUE (vve_id, duplicaat_hash)` met `ON CONFLICT DO NOTHING`, niet een
+controle in code. Hetzelfde bestand tweemaal inlezen voegt niets toe omdat de database het
+niet toelaat — niet omdat wij eraan dachten. De hash dekt rekening, boekdatum, bedrag,
+tegenrekening, omschrijving en de bankreferentie; die laatste maakt twee identieke
+betalingen op dezelfde dag alsnog onderscheidbaar.
+
+### Een gat in de continuïteit blokkeert de import niet
+
+AC7.3 spreekt van een blokkerende waarschuwing. De import gaat hier tóch door, en het gat
+wordt vastgelegd op de importregel en teruggemeld. Reden: de posten in het bestand zijn
+echt, en ze weggooien helpt niemand — de beheerder moet zien dát er een afschrift ontbreekt
+én hoeveel, en dan zelf het ontbrekende bestand nalezen. Wat blokkeert is het afletteren
+daarna, niet het inlezen.
+
+### De tegenpartij hangt aan de andere kant dan wijzelf
+
+Bij een bijschrijving is de tegenpartij de debiteur, bij een afschrijving de crediteur. Wie
+maar één richting test, leest de andere verkeerd uit en krijgt zijn eigen naam terug.
+Daarom staan beide richtingen in de fixture.
+
+### Meerdere `Ustrd`-regels worden aaneengeplakt
+
+Banken knippen een lange omschrijving op. Wie alleen de eerste regel leest, mist het
+betalingskenmerk dat er net achter stond — en dat is precies waarop B05 gaat afletteren.
+
+### De fixture-IBAN's hebben een geldige mod-97-controle
+
+Eerste versie gebruikte verzonnen nummers. De test op de IBAN-versleuteling viel er meteen
+over: een ongeldige IBAN wordt niet versleuteld maar alleen gemaskeerd. Dat gedrag klopt —
+de fixture klopte niet. De nummers zijn nu doorgerekend.
+
+### Een onbekende bankrekening wordt geweigerd
+
+Automatisch aanmaken bij import zou betekenen dat een verkeerd bestand stilletjes een
+nieuwe rekening opvoert in de administratie. Liever hoorbaar weigeren; de rekening opvoeren
+is een aparte handeling, en die staat achter `vve.iban.wijzig` — een geldstroomrecht, want
+het bepaalt waar het geld van de VvE langskomt.

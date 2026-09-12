@@ -82,10 +82,10 @@ describe('CAMT.053 (AC7.1)', () => {
     const [bij, af] = afschrift?.mutaties ?? [];
     // Bijschrijving: de tegenpartij is de debiteur.
     expect(bij?.tegenpartijNaam).toBe('J. de Vries');
-    expect(bij?.tegenrekeningIban).toBe('NL91INGB0001234567');
+    expect(bij?.tegenrekeningIban).toBe('NL20INGB0001234567');
     // Afschrijving: de tegenpartij is de crediteur.
     expect(af?.tegenpartijNaam).toBe('Liftservice Noord B.V.');
-    expect(af?.tegenrekeningIban).toBe('NL44RABO0987654321');
+    expect(af?.tegenrekeningIban).toBe('NL93RABO0987654321');
   });
 
   it('plakt meerdere Ustrd-regels aaneen — het kenmerk staat vaak in de tweede', () => {
@@ -108,7 +108,7 @@ describe('CAMT.053 (AC7.1)', () => {
     expect(bij?.duplicaatSleutel).toContain('NL02ABNA0123456789');
     expect(bij?.duplicaatSleutel).toContain('2026-03-01');
     expect(bij?.duplicaatSleutel).toContain('21250');
-    expect(bij?.duplicaatSleutel).toContain('NL91INGB0001234567');
+    expect(bij?.duplicaatSleutel).toContain('NL20INGB0001234567');
     expect(bij?.duplicaatSleutel).toContain('REF-0001');
 
     // Twee keer hetzelfde bestand lezen levert dezelfde sleutels op; dáár

@@ -2,6 +2,7 @@
 import { Module } from '@nestjs/common';
 
 import { DatabaseModule } from './database/database.module.js';
+import { BankModule } from './bank/bank.module.js';
 import { FinancieelModule } from './financieel/financieel.module.js';
 import { GrootboekModule } from './financieel/grootboek.module.js';
 import { BegrotingModule } from './financieel/begroting.module.js';
@@ -33,6 +34,7 @@ import { VveModule } from './modules/vve/vve.module.js';
     UitnodigingenModule,
     GrootboekModule,
     FinancieelModule,
+    BankModule,
     VerdeelsleutelModule,
     BegrotingModule,
     BijdrageModule,

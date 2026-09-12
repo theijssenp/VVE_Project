@@ -56,6 +56,7 @@ export { aanmaning, aanmaningInstelling } from './aanmaning.js';
 export { leverancier, leverancierContract, verplichting } from './leverancier.js';
 export { mededeling, mailSjabloon } from './mededeling.js';
 export { kascommissieVerklaring } from './kascommissie.js';
+export { bankrekening, bankImport, bankmutatie } from './bank.js';
 export type { Vve, NieuweVve } from './vve.js';
 export type { Persoon, NieuwePersoon } from './persoon.js';
 export type { RolToewijzing, NieuweRolToewijzing } from './rol-toewijzing.js';

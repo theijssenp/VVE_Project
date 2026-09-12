@@ -12,6 +12,7 @@ import { MfaController } from './modules/auth/mfa.controller.js';
 import { EenhedenController } from './modules/eenheden/eenheden.controller.js';
 import { FinancieelController } from './financieel/financieel.controller.js';
 import { BalansController } from './financieel/balans.controller.js';
+import { BankController } from './bank/bank.controller.js';
 import { BegrotingController } from './financieel/begroting.controller.js';
 import { BijdrageController } from './financieel/bijdrage.controller.js';
 import { NotaController } from './financieel/nota.controller.js';
@@ -48,6 +49,7 @@ export const ALLE_CONTROLLERS = [
   UitnodigingenController,
   FinancieelController,
   BalansController,
+  BankController,
   VerdeelsleutelController,
   BegrotingController,
   BijdrageController,
