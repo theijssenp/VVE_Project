@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Geanonimiseerd dagafschrift, opgebouwd naar camt.053.001.02 zoals de
+     Nederlandse banken hem aanleveren: meerdere Ustrd-regels, een post met
+     alleen AddtlNtryInf, en een bij- en afschrijving. -->
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.053.001.02">
+  <BkToCstmrStmt>
+    <GrpHdr>
+      <MsgId>ANONIEM-20260301</MsgId>
+      <CreDtTm>2026-03-02T01:15:00.000+01:00</CreDtTm>
+    </GrpHdr>
+    <Stmt>
+      <Id>2026031</Id>
+      <LglSeqNb>31</LglSeqNb>
+      <CreDtTm>2026-03-02T01:15:00.000+01:00</CreDtTm>
+      <Acct>
+        <Id><IBAN>NL02ABNA0123456789</IBAN></Id>
+        <Ccy>EUR</Ccy>
+      </Acct>
+      <Bal>
+        <Tp><CdOrPrtry><Cd>OPBD</Cd></CdOrPrtry></Tp>
+        <Amt Ccy="EUR">1500.00</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <Dt><Dt>2026-03-01</Dt></Dt>
+      </Bal>
+      <Bal>
+        <Tp><CdOrPrtry><Cd>CLBD</Cd></CdOrPrtry></Tp>
+        <Amt Ccy="EUR">1637.50</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <Dt><Dt>2026-03-01</Dt></Dt>
+      </Bal>
+      <Ntry>
+        <Amt Ccy="EUR">212.50</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <Sts>BOOK</Sts>
+        <BookgDt><Dt>2026-03-01</Dt></BookgDt>
+        <ValDt><Dt>2026-03-01</Dt></ValDt>
+        <AcctSvcrRef>REF-0001</AcctSvcrRef>
+        <NtryDtls>
+          <TxDtls>
+            <Refs><EndToEndId>NOTA2026000123</EndToEndId></Refs>
+            <RltdPties>
+              <Dbtr><Nm>J. de Vries</Nm></Dbtr>
+              <DbtrAcct><Id><IBAN>NL91INGB0001234567</IBAN></Id></DbtrAcct>
+            </RltdPties>
+            <RmtInf>
+              <Ustrd>Bijdrage maart 2026</Ustrd>
+              <Ustrd>kenmerk NOTA2026000123</Ustrd>
+            </RmtInf>
+          </TxDtls>
+        </NtryDtls>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="EUR">75.00</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <Sts>BOOK</Sts>
+        <BookgDt><Dt>2026-03-01</Dt></BookgDt>
+        <ValDt><Dt>2026-03-01</Dt></ValDt>
+        <AcctSvcrRef>REF-0002</AcctSvcrRef>
+        <NtryDtls>
+          <TxDtls>
+            <RltdPties>
+              <Cdtr><Nm>Liftservice Noord B.V.</Nm></Cdtr>
+              <CdtrAcct><Id><IBAN>NL44RABO0987654321</IBAN></Id></CdtrAcct>
+            </RltdPties>
+            <RmtInf><Ustrd>Onderhoudscontract lift Q1</Ustrd></RmtInf>
+          </TxDtls>
+        </NtryDtls>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="EUR">0.00</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <Sts>BOOK</Sts>
+        <BookgDt><Dt>2026-03-01</Dt></BookgDt>
+        <AcctSvcrRef>REF-0003</AcctSvcrRef>
+        <AddtlNtryInf>Kosten betalingsverkeer &amp; pas</AddtlNtryInf>
+      </Ntry>
+    </Stmt>
+  </BkToCstmrStmt>
+</Document>
