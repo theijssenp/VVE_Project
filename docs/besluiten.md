@@ -2142,7 +2142,7 @@ De client-kant van de documenten volgt in V07 (eigenaarsportaal).
 
 ### Eigenaar-zicht, niet bestuur-zicht
 
-Het overzicht retourneert uitsluitend de eenheden waar de opvrager *zelf* een lopende
+Het overzicht retourneert uitsluitend de eenheden waar de opvrager _zelf_ een lopende
 eigenaarsperiode voor heeft (`periode @> current_date` op persoonId). De RLS-policy
 filtert op VvE, niet op persoon — het eigenaar-zicht is daarom een expliciete WHERE,
 net als de seed-scope-regel in de tests. Een bewoner/zonder-eigenaarschap ziet een
