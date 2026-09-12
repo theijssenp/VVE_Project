@@ -88,7 +88,7 @@ Alles in deze fase werkt zónder incasso. Het betalingskenmerk op de nota is hie
 | B02 | CAMT.053-parser met fixtures, duplicaatdetectie, saldocontinuïteit | L | B01 | §10 · tests 11–12 | **klaar** |
 | B03 | MT940-parser voor ING en Rabobank, genormaliseerd naar hetzelfde model | M | B02 | §10 · test 14 | todo |
 | B04 | CSV-bankprofielen met kolommapping en encodingdetectie | M | B02 | §10 · AC7.1 | todo |
-| B05 | Matchingmotor (kenmerk → E2E → IBAN-HMAC → FIFO → leverancier), werkbak, opslaanbare boekingsregels | L | B02, G08 | M7 · test 13, AC7.4–7.5 | todo |
+| B05 | Matchingmotor (kenmerk → E2E → IBAN-HMAC → FIFO → leverancier), werkbak, opslaanbare boekingsregels | L | B02, G08 | M7 · test 13, AC7.4–7.5 | **klaar** |
 | B06 | Bankrekeningen, saldocontrole, herkenning van interne overboekingen tussen eigen rekeningen | M | B05 | M7 · AC7.3, AC7.6 | todo |
 | B07 | Proefbalans, saldibalans, grootboekweergave met doorklik naar brondocument | M | G02 | M9 · AC9.8 | **klaar** |
 | B08 | Jaarrekening: balans en staat van baten en lasten, PDF en XLSX | M | B07 | M9 · AC9.4 | **klaar** |
@@ -180,7 +180,7 @@ AES-GCM.
 | | Aantal |
 |---|---|
 | Blokken totaal | 71 |
-| Klaar | 38 |
+| Klaar | 39 |
 | Bezig | 0 |
 
 Statuswaarden: `todo` · `bezig` · `klaar` · `overgeslagen`.

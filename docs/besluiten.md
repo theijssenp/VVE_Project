@@ -2400,3 +2400,43 @@ Automatisch aanmaken bij import zou betekenen dat een verkeerd bestand stilletje
 nieuwe rekening opvoert in de administratie. Liever hoorbaar weigeren; de rekening opvoeren
 is een aparte handeling, en die staat achter `vve.iban.wijzig` — een geldstroomrecht, want
 het bepaalt waar het geld van de VvE langskomt.
+
+## B05 — Matchingmotor (12-09-2026)
+
+### De rangorde bepaalt niet alleen de volgorde, maar ook wat er gebeurt
+
+AC7.4 noemt vijf stappen. De eerste drie zijn exact — betalingskenmerk,
+End-to-End-ID, tegenrekening mét exact hetzelfde bedrag — en die mogen leiden tot een
+koppeling. Stap 4 en 5 zijn voorstellen en blijven in de werkbak staan.
+
+Die grens is de kern van dit blok. Automatisch afboeken op een afwijkend bedrag maakt van
+één verkeerde betaling een reeks scheve openstaande posten, en die vindt niemand meer
+terug. AC7.4 zegt het zelf: "bij een afwijkend bedrag alleen voorstellen, niet automatisch
+boeken". Daarom draagt elk voorstel een `zekerheid`, en boekt de motor alleen op 100.
+
+### De omschrijving van een bank is rommelig
+
+Hoofdletters, spaties en interpunctie liggen niet vast. Het kenmerk wordt daarom vergeleken
+op een genormaliseerde vorm — alleen letters en cijfers, hoofdletters — zodat
+`nota 2026 0001` en `NOTA20260001` hetzelfde opleveren. Dat is geen luxe: zonder die
+normalisatie mist stap 1 vrijwel elke handmatige overboeking.
+
+### De koppeling IBAN → eenheid loopt via de machtiging
+
+Dat is de enige plek waar een privé-IBAN aan een eenheid hangt, en het zoeken gebeurt op de
+HMAC — zonder ooit te ontsleutelen (§6.2). Er is bewust géén terugval op het eigenaarschap
+wanneer er geen machtiging is: dat zou een gok zijn op basis van "deze eigenaar heeft ook
+een openstaande post", en gokken hoort niet in een geldstroom. Zo'n mutatie gaat naar de
+werkbak, waar een mens hem koppelt.
+
+### Dezelfde nota niet tweemaal binnen één ronde
+
+Twee betalingen met hetzelfde kenmerk zouden anders allebei exact matchen op dezelfde post.
+De eerste wint; de tweede belandt in de werkbak. Daar staat een test op, want dit is precies
+het soort dubbeling dat pas bij de jaarafsluiting opvalt.
+
+### Een bevat-toets, geen reguliere expressie
+
+De opslaanbare boekingsregels (AC7.5) vergelijken op een eenvoudige bevat-toets. Wie hier
+een regex mag invoeren, kan met één verkeerd teken de hele werkbak leegvegen naar één
+kostenrekening.

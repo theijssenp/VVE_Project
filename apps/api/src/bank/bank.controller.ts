@@ -36,6 +36,8 @@ import {
   type BankimportService,
   type ImportUitkomst,
 } from './bankimport-service.js';
+import { maakMatchingService, type MatchingService } from './matching-service.js';
+import { bankBoekingsregel } from '../database/schema/bank-match.js';
 import {
   OngeldigIbanFout,
   beveiligIban,
@@ -52,10 +54,12 @@ interface MetInlog extends Request {
 export class BankController {
   readonly #db: NodePgDatabase;
   readonly #import: BankimportService;
+  readonly #matching: MatchingService;
 
   constructor(@Inject(DATABASE) db: NodePgDatabase) {
     this.#db = db;
     this.#import = maakBankimportService({ db });
+    this.#matching = maakMatchingService({ db });
   }
 
   #eisTenant(verzoek: MetInlog): { vveId: bigint; persoonId: bigint } {
@@ -167,6 +171,66 @@ export class BankController {
     const bestandsnaam = typeof body.bestandsnaam === 'string' ? body.bestandsnaam : null;
     try {
       return await this.#import.importeerCamt053(vveId, body.xml, { bestandsnaam }, persoonId);
+    } catch (fout: unknown) {
+      return this.#alsHttp(fout);
+    }
+  }
+
+  /**
+   * Een matchronde draaien (AC7.4). Lezen én schrijven — de voorstellen worden
+   * vastgelegd — maar er gaat geen geld om: dit stelt alleen voor.
+   */
+  @Post('match')
+  @VereistRecht('bank.matchen')
+  async match(@Req() verzoek: MetInlog): Promise<unknown> {
+    const { vveId } = this.#eisTenant(verzoek);
+    return this.#matching.matchOpenstaande(vveId);
+  }
+
+  /** De werkbak (AC7.5): wat nog aandacht vraagt, met de voorstellen erbij. */
+  @Get('werkbak')
+  @VereistRecht('bank.lezen')
+  async werkbak(@Req() verzoek: MetInlog): Promise<unknown> {
+    const { vveId } = this.#eisTenant(verzoek);
+    return this.#matching.werkbak(vveId);
+  }
+
+  /**
+   * Een eigen boekingsregel opslaan (AC7.5): "bevat 'Vitens' → 4310".
+   *
+   * Dit is de knop waarmee een handmatige correctie zichzelf de volgende keer
+   * overbodig maakt. Bewust geen reguliere expressie maar een simpele
+   * bevat-toets: wie hier een regex mag invoeren, kan de werkbak onbedoeld
+   * leegvegen met één verkeerd teken.
+   */
+  @Post('boekingsregels')
+  @VereistRecht('bank.regel.beheren')
+  async voegRegelToe(
+    @Req() verzoek: MetInlog,
+    @Body() body: { bevat?: unknown; grootboekrekeningId?: unknown; omschrijving?: unknown },
+  ): Promise<{ id: bigint }> {
+    const { vveId } = this.#eisTenant(verzoek);
+    if (typeof body.bevat !== 'string' || body.bevat.trim().length < 3) {
+      throw new BadRequestException('Veld "bevat" is verplicht en minstens drie tekens lang.');
+    }
+    if (typeof body.grootboekrekeningId !== 'string' || !/^\d+$/.test(body.grootboekrekeningId)) {
+      throw new BadRequestException('Veld "grootboekrekeningId" is verplicht.');
+    }
+    const omschrijving = typeof body.omschrijving === 'string' ? body.omschrijving : null;
+    try {
+      return await inTenantTransactie(this.#db, vveId, async (tx) => {
+        const [rij] = await tx
+          .insert(bankBoekingsregel)
+          .values({
+            vveId,
+            bevat: (body.bevat as string).trim(),
+            grootboekrekeningId: BigInt(body.grootboekrekeningId as string),
+            omschrijving,
+          })
+          .returning({ id: bankBoekingsregel.id });
+        if (rij === undefined) throw new InvoerFout('Deze regel bestaat al.');
+        return rij;
+      });
     } catch (fout: unknown) {
       return this.#alsHttp(fout);
     }
