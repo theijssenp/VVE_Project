@@ -2219,3 +2219,53 @@ De optelling gebeurt in SQL (`sum` over `bigint`-centen) en wat eruit komt wordt
 getoond. Zodra er weer mee gerekend wordt — de jaarrekening van B08 — hoort het via
 `Bedrag` te gaan (§7.3). Dat staat als opmerking in de kop van de service, zodat B08 het
 niet per ongeluk overneemt.
+
+## B08 — Jaarrekening met PDF en XLSX (12-09-2026)
+
+### Een eigen XLSX-schrijver, geen bibliotheek
+
+§8.1 punt 5 noemt een gekaapte npm-afhankelijkheid als reëel risico, en §8.2 eist een
+smalle productie-image. G07 schreef om die reden zijn eigen PDF-bouwer. Wat hier nodig is —
+een tabel met tekst en getallen, geen formules of opmaakmotor — rechtvaardigt geen
+`exceljs` met zijn afhankelijkhedenboom. `gemeenschappelijk/xlsx.ts` schrijft een ZIP met
+`stored`-entries (geen deflate nodig) en SpreadsheetML met inline strings. Deterministische
+bytes, zodat de test hem zonder xlsx-parser kan uitpakken en nalezen.
+
+Getallen gaan als **getal** het blad in, en in euro's in plaats van centen. Binnen de
+applicatie is de cent de eenheid (§5.1), maar wie een spreadsheet opent wil kunnen
+optellen; de omrekening gebeurt op de rand, in de exportlaag, en nergens anders.
+
+### Een gedeelde PDF-laag, want dit stuk past niet op één pagina
+
+De nota van G07 is altijd één pagina; een jaarrekening niet. Vandaar
+`gemeenschappelijk/pdf.ts`: dezelfde dependency-vrije aanpak, maar met meerdere pagina's en
+een `PaginaOpbouw` die zelf bijhoudt wanneer de ruimte op is. `nota-pdf.ts` staat er nog
+naast en kan later op deze laag; dat is een aparte stap met de G07-tests als vangnet, niet
+iets om in dit blok mee te nemen.
+
+### Het resultaat wordt afgeleid, niet opgezocht
+
+Baten min lasten — bewust niet het saldo van een resultaatrekening. Dat saldo bestaat pas ná
+het afsluiten (AC9.3), terwijl de jaarrekening juist vóór het afsluiten gelezen wordt: in de
+ALV. Om dezelfde reden telt `inBalans` het resultaat mee in de controle
+(activa = passiva + eigen vermogen + resultaat). Zonder die term zou de balans altijd
+falen op precies het moment dat het stuk nodig is.
+
+### Tekens: positief aan de eigen kant
+
+Activa en lasten staan debet, passiva, eigen vermogen en baten credit; elk bedrag komt
+positief in beeld aan de kant die bij de rekening hoort. Voor een vrijwilliger is een
+negatief bedrag dat eigenlijk "andersom" betekent de grootste bron van verwarring in een
+jaarrekening.
+
+### Alleen een vastgestelde begroting is een maatstaf
+
+De vergelijkende kolom telt een begroting met status `concept` niet mee: dat is nog geen
+afspraak (AC5.1). Pas een vastgestelde begroting is iets om de realisatie tegen af te zetten.
+
+### Eén exportroute, twee formaten
+
+`GET …/jaarrekening/:id/export.pdf|xlsx` in plaats van twee routes. De inhoud is identiek,
+alleen de verpakking verschilt; met twee routes ontstaat vroeg of laat verschil tussen de
+twee. De bestanden gaan als `attachment` de deur uit: dit is een stuk voor de ALV dat mensen
+bewaren, geen pagina om even te bekijken.

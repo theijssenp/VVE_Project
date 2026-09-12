@@ -20,9 +20,11 @@ import {
   Param,
   Query,
   Req,
+  Res,
+  StreamableFile,
   UseGuards,
 } from '@nestjs/common';
-import type { Request } from 'express';
+import type { Request, Response } from 'express';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import { DATABASE } from '../database/database.module.js';
@@ -37,6 +39,12 @@ import {
   type GrootboekWeergave,
   type ProefSaldiBalans,
 } from './balans-service.js';
+import {
+  maakJaarrekeningService,
+  type Jaarrekening,
+  type JaarrekeningService,
+} from './jaarrekening-service.js';
+import { bouwJaarrekeningPdf, bouwJaarrekeningXlsx } from './jaarrekening-export.js';
 
 interface MetInlog extends Request {
   inlogContext?: { persoonId: bigint; vveId: bigint | null };
@@ -54,9 +62,11 @@ function idUit(waarde: string, veld: string): bigint {
 @UseGuards(SessieGuard, TenantSessieGuard, RolSessieGuard)
 export class BalansController {
   readonly #balans: BalansService;
+  readonly #jaarrekening: JaarrekeningService;
 
   constructor(@Inject(DATABASE) db: NodePgDatabase) {
     this.#balans = maakBalansService({ db });
+    this.#jaarrekening = maakJaarrekeningService({ db });
   }
 
   #eisTenant(verzoek: MetInlog): bigint {
@@ -130,5 +140,57 @@ export class BalansController {
     } catch (fout: unknown) {
       return this.#alsHttp(fout);
     }
+  }
+
+  /** De jaarrekening als gegevens (AC9.4); PDF en XLSX hieronder. */
+  @Get('jaarrekening/:boekjaarId')
+  @VereistRecht('boekhouding.lezen')
+  async jaarrekening(
+    @Req() verzoek: MetInlog,
+    @Param('boekjaarId') boekjaarId: string,
+  ): Promise<Jaarrekening> {
+    const vveId = this.#eisTenant(verzoek);
+    try {
+      return await this.#jaarrekening.jaarrekening(vveId, idUit(boekjaarId, 'boekjaar-id'));
+    } catch (fout: unknown) {
+      return this.#alsHttp(fout);
+    }
+  }
+
+  /**
+   * Jaarrekening als PDF of XLSX (AC9.4). Eén route met een formaatparameter en
+   * niet twee: de inhoud is identiek, alleen de verpakking verschilt, en zo kan
+   * er geen verschil tussen de twee ontstaan.
+   */
+  @Get('jaarrekening/:boekjaarId/export.:formaat')
+  @VereistRecht('boekhouding.lezen')
+  async exporteer(
+    @Req() verzoek: MetInlog,
+    @Res({ passthrough: true }) antwoord: Response,
+    @Param('boekjaarId') boekjaarId: string,
+    @Param('formaat') formaat: string,
+  ): Promise<StreamableFile> {
+    const vveId = this.#eisTenant(verzoek);
+    if (formaat !== 'pdf' && formaat !== 'xlsx') {
+      throw new BadRequestException('Formaat moet "pdf" of "xlsx" zijn.');
+    }
+    let jr: Jaarrekening;
+    try {
+      jr = await this.#jaarrekening.jaarrekening(vveId, idUit(boekjaarId, 'boekjaar-id'));
+    } catch (fout: unknown) {
+      return this.#alsHttp(fout);
+    }
+    const bytes = formaat === 'pdf' ? bouwJaarrekeningPdf(jr) : bouwJaarrekeningXlsx(jr);
+    const bestandsnaam = `jaarrekening-${String(jr.jaar)}.${formaat}`;
+    antwoord.set({
+      'Content-Type':
+        formaat === 'pdf'
+          ? 'application/pdf'
+          : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      // `attachment` en niet `inline`: dit is een stuk voor de ALV dat mensen
+      // bewaren, geen pagina om even in de browser te bekijken.
+      'Content-Disposition': `attachment; filename="${bestandsnaam}"`,
+    });
+    return new StreamableFile(bytes);
   }
 }
