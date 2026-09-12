@@ -56,7 +56,7 @@ Zonder deze blokken kan er niets anders gebouwd worden. F03 t/m F09 zijn de drag
 |---|---|---|---|---|---|
 | V01 | VvE aanmaken en beheren door applicatiebeheerder; beheerderaccount; instellink én "opnieuw wachtwoord versturen" | M | F08, F10 | M1, §3.3 · AC1.1–1.5 | **klaar** |
 | V02 | Wooneenheden: CRUD, typen, m², breukdelen, stemmen, controle op de som van de breukdelen | M | V01 | M2 · AC2.1–2.3 | **klaar** |
-| V03 | Eigenaarschap met `daterange`, exclusion constraint, meerdere eigenaren, eigenaarswissel met verrekenoverzicht voor de notaris | L | V02 | M2 · AC2.4–2.5, test 34 | todo |
+| V03 | Eigenaarschap met `daterange`, exclusion constraint, meerdere eigenaren, eigenaarswissel met verrekenoverzicht voor de notaris | L | V02 | M2 · AC2.4–2.5, test 34 | **klaar** |
 | V04 | Uitnodigingen: token, verlopen, opnieuw versturen, registratie- en activatieflow, bestaande persoon koppelen | M | V01 | §3.3 · AC2.2 | **klaar** |
 | V05 | Documenten: upload met MIME-detectie, opslag buiten de webroot, zichtbaarheid, download-endpoint, versiebeheer, zoeken | L | F08 | M3 · AC3.1–3.7 | todo |
 | V06 | CSV/XLSX-import van eenheden en eigenaren met validatie vooraf en dry-run-rapport | M | V03 | M2 · AC2.7 | todo |
@@ -180,7 +180,7 @@ AES-GCM.
 | | Aantal |
 |---|---|
 | Blokken totaal | 71 |
-| Klaar | 29 |
+| Klaar | 30 |
 | Bezig | 0 |
 
 Statuswaarden: `todo` · `bezig` · `klaar` · `overgeslagen`.

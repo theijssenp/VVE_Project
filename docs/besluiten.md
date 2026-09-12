@@ -1997,3 +1997,53 @@ heeft geactiveerd komt er ook met een token van vóór de step-up langs. Dat is 
 oplevert; herauthenticatie per handeling stond in de F07-code aangekondigd voor F08 en is
 daar niet gebouwd. Er staat nu een test die dit gedrag vastlegt, zodat de aanname niet
 opnieuw verkeerd gelezen wordt. Het echte werk hoort bij I03 (vier-ogen en herauthenticatie).
+
+## V03 — Eigenaarschap (12-09-2026)
+
+### De somtoets kan niet in de database, de EXCLUDE's niet in de service
+
+Migratie 0010 bewaakt met twee EX USING gist-constraints wat Postgres kan: geen twee keer
+volledig eigendom (1000 promille) op dezelfde eenheid in dezelfde periode, en geen
+overlappende periodes per (eenheid, persoon). Wat Postgres **niet** kan is een aggregaat in
+een constraint: de som van de aandelen ≤ 1000 per dag (test 34: 600+600 geweigerd,
+500+500 toegestaan). Die toets zit daarom in de service (`voegEigenaarToe`), direct vóór
+de insert. Beide lagen bewaken dus wat zij bewaken kán; de tests toetsen beide paden,
+ook de directe insert langs de service heen (23P01).
+
+### Rato-verdeling via de grootste-restmethode, niet per persoon
+
+Het verrekenoverzicht (AC2.5/AC9.6-geest) verdeelt het jaartotaal van de eenheid naar rato
+over de eigenaarsperioden: gewicht = dagen in het jaar × aandeel, verdeling via
+`verdeelGrootsteRest` uit `@vve/domein`. De som van de rijbedragen is daarmee exact gelijk
+aan het jaartotaal — geen restcenten die verdwijnen of verdubbelen. Een eerdere opzet
+filterde de nota's per persoon en vermenigvuldigde daarna met dagen/dagenInJaar in rauwe
+cent-rekenkunde: fout bij een wissel binnen het jaar (de nota na de wissel hoort aan de
+nieuwe eigenaar, maar zat op de oude persoon) en verboden door de F05-centregel. Historische
+nota's blijven bewust aan de oorspronkelijke eigenaar gekoppeld; het overzicht verdeelt
+alleen het jaartotaal van de eenheid.
+
+### `totEnMet` is de laatste dag inclusief
+
+De daterange bewaart `[start, eind)`; de weergave geeft "tot en met" terug (eind − 1 dag).
+Historische rijen tonen daarmee de dag waarop het eigendom nog geldig was, open rijen
+geven null. De parse van de daterange-tekst behandelt half-open ranges correct — een
+eerdere parse las `[a,b)` als open range en verloor daarmee de einddatum van juist de
+historische rijen.
+
+### `SystemKlok.vandaag()` brak op Node 22
+
+`formatToParts` levert óók de letterlijke scheiders als onderdelen; de oude code joeg alles
+door één `join('/')` en splitste daarna opnieuw — op Node 22 resulteerde dat in
+`"2026/-/09/-/12"`, maand NaN, en elke query met een default-datum crashte met pg-fout 22007
+(invalid input syntax for type date). Vrijwel elke suite zou dit raken zodra een service een
+default-vandaag nodig heeft. Nu per `type` gelezen (year/month/day) met een harde weigering
+als Intl iets onleesbaars teruggeeft. Dit is een infrastructuurfix die buiten V03 om elk
+toekomstig blok helpt.
+
+### Wat V03 bewust niet doet
+
+Een aandeelwijziging van een lopend eigenaarschap is een UPDATE op de rij (de somtoets
+bewaakt alleen het toevoegen). Bulk-import en de CSV-flow horen bij V06; de notaris-PDF
+van het verrekenoverzicht volgt bij het verzend-blok (G13-patroon, datastructuur eerst).
+Huurders/bewoners (AC2.6) zijn een apart register en horen bij het blok dat hun beperkte
+toegang uitwerkt.

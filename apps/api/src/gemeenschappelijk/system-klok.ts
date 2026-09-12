@@ -45,19 +45,22 @@ export class SystemKlok implements Klok {
   vandaag(): KalenderDag {
     // De kalenderdeel (jaar/maand/dag) in Europe/Amsterdam, zonder de tijdsdeel
     // of een conversie op te sommen — een datum is een datum (spec §5.8).
+    // formatToParts levert óók de letterlijke scheiders ('/') als onderdelen;
+    // die worden expliciet weggefilterd — op Node 22 breekt de oude join anders
+    // op "2026/-/09/-/12" (maand NaN, pg-fout 22007 op elke default-datum).
     const deeltjes = new Intl.DateTimeFormat('en-CA', {
       timeZone: 'Europe/Amsterdam',
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
     }).formatToParts(new Date());
-    // en-CA levert iso-achtige 'yyyy/mm/dd' — dus direct splitbaar op '/'.
-    const tekst = deeltjes.map((d) => d.value).join('/');
-    const [jaar, maand, dag] = tekst.split('/');
-    return {
-      jaar: Number(jaar),
-      maand: Number(maand),
-      dag: Number(dag),
-    };
+    const onderdeel = (type: string): string => deeltjes.find((d) => d.type === type)?.value ?? '';
+    const jaar = Number(onderdeel('year'));
+    const maand = Number(onderdeel('month'));
+    const dag = Number(onderdeel('day'));
+    if (!Number.isInteger(jaar) || !Number.isInteger(maand) || !Number.isInteger(dag)) {
+      throw new Error('SystemKlok.vandaag(): onleesbare kalenderdag van Intl.DateTimeFormat.');
+    }
+    return { jaar, maand, dag };
   }
 }

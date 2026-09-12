@@ -14,6 +14,7 @@ import { AanmaningModule } from './financieel/aanmaning.module.js';
 import { DebiteurenModule } from './financieel/debiteuren.module.js';
 import { LeverancierModule } from './financieel/leverancier.module.js';
 import { MededelingModule } from './financieel/mededeling.module.js';
+import { EigenaarschapModule } from './financieel/eigenaarschap.module.js';
 import { AuthModule } from './modules/auth/auth.module.js';
 import { EenhedenModule } from './modules/eenheden/eenheden.module.js';
 import { HealthModule } from './modules/health/health.module.js';
@@ -39,6 +40,7 @@ import { VveModule } from './modules/vve/vve.module.js';
     DebiteurenModule,
     LeverancierModule,
     MededelingModule,
+    EigenaarschapModule,
     AanmaningModule,
   ],
 })
