@@ -92,7 +92,7 @@ Alles in deze fase werkt zónder incasso. Het betalingskenmerk op de nota is hie
 | B06 | Bankrekeningen, saldocontrole, herkenning van interne overboekingen tussen eigen rekeningen | M | B05 | M7 · AC7.3, AC7.6 | todo |
 | B07 | Proefbalans, saldibalans, grootboekweergave met doorklik naar brondocument | M | G02 | M9 · AC9.8 | **klaar** |
 | B08 | Jaarrekening: balans en staat van baten en lasten, PDF en XLSX | M | B07 | M9 · AC9.4 | **klaar** |
-| B09 | Afrekening servicekosten per eenheid, pro rata bij eigenaarswissel | L | B08, V03 | M9 · AC9.5–9.6, tests 22–23 | todo |
+| B09 | Afrekening servicekosten per eenheid, pro rata bij eigenaarswissel | L | B08, V03 | M9 · AC9.5–9.6, tests 22–23 | **klaar** |
 | B10 | Boekjaar afsluiten, vergrendelen, resultaatbestemming, kascommissie-modus | M | B09 | M9 · AC9.3, AC9.7 | todo |
 | B11 | **Live-gang pilot-VvE** — data-overname, controlelijst, back-uptest, restoreproef | S | B10 | §8.6 | todo |
 
@@ -180,7 +180,7 @@ AES-GCM.
 | | Aantal |
 |---|---|
 | Blokken totaal | 71 |
-| Klaar | 35 |
+| Klaar | 36 |
 | Bezig | 0 |
 
 Statuswaarden: `todo` · `bezig` · `klaar` · `overgeslagen`.

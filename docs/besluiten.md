@@ -2269,3 +2269,44 @@ afspraak (AC5.1). Pas een vastgestelde begroting is iets om de realisatie tegen 
 alleen de verpakking verschilt; met twee routes ontstaat vroeg of laat verschil tussen de
 twee. De bestanden gaan als `attachment` de deur uit: dit is een stuk voor de ALV dat mensen
 bewaren, geen pagina om even te bekijken.
+
+## B09 — Afrekening servicekosten (12-09-2026)
+
+### "In rekening gebracht", niet "betaald"
+
+AC9.5 spreekt van _betaalde_ voorschotten. De afrekening rekent hier af tegen wat er in
+rekening is gebracht — de nota's van het boekjaar — en niet tegen wat er binnen is. Dat is
+geen slordigheid maar het verschil tussen een kloppende en een dubbeltellende
+administratie: een eigenaar die zijn bijdrage niet betaalde heeft dat bedrag nog openstaan
+als debiteur, en zou de afrekening zijn onbetaalde voorschot negeren, dan kreeg hij het
+tweemaal gepresenteerd — één keer als openstaande nota, één keer als afrekeningstekort.
+
+### De sleutel komt uit de begroting, niet uit de afrekening
+
+De begroting legt per kostenpost een verdeelsleutel vast (AC4.3), en de afrekening volgt
+diezelfde toewijzing voor de werkelijke kosten. Zo wordt afgerekend volgens de sleutel
+waarover de ALV heeft besloten, en niet volgens een sleutel die achteraf gekozen is.
+
+Een kostenrekening waarvoor niets begroot is, valt terug op de eerste actieve sleutel van
+de VvE en wordt **gemeld** in `zonderEigenSleutel`. Overslaan zou een onvoorziene
+kostenpost stilletjes buiten de afrekening houden; stil doorrekenen zou verbergen dat er
+een keuze is gemaakt die niemand genomen heeft. Melden is het enige eerlijke van de drie.
+
+### Pro rata over dagen, via de bestaande verdeler
+
+Bij een eigenaarswissel binnen het jaar (AC9.6) gaat het saldo van die eenheid over de
+dagen, met de grootste-restmethode van F05 — dezelfde die de bijdragen verdeelt. Daardoor
+tellen de delen exact op tot het geheel, wat test #23 letterlijk eist. De test rekent
+181/365 en 184/365 met de hand na; een pro-rataverdeling die zichzelf bevestigt bewijst
+niets.
+
+De verdeler werkt op eenheid-ids. Hier zijn de "eenheden" opeenvolgende eigenaarsperioden,
+dus de index dient als sleutel — dat houdt de volgorde intact, ook als dezelfde persoon
+twee losse perioden in één jaar heeft.
+
+### Nullable SQL-types
+
+`min()`, `sum()` en `upper()` van een open `daterange` leveren NULL. Die kolommen zijn
+daarom als `sql<string | null>` getypeerd. ESLint viel eerst over de nullchecks ("de types
+overlappen niet") — terecht, maar de conclusie was omgekeerd: niet de controle was
+overbodig, het type loog. Het type is rechtgezet, de controle blijft staan.

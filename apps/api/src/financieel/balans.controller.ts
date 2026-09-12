@@ -45,6 +45,12 @@ import {
   type JaarrekeningService,
 } from './jaarrekening-service.js';
 import { bouwJaarrekeningPdf, bouwJaarrekeningXlsx } from './jaarrekening-export.js';
+import {
+  maakAfrekeningService,
+  type Afrekening,
+  type AfrekeningService,
+} from './afrekening-service.js';
+import { InvoerFout } from './boekhouding.js';
 
 interface MetInlog extends Request {
   inlogContext?: { persoonId: bigint; vveId: bigint | null };
@@ -63,10 +69,12 @@ function idUit(waarde: string, veld: string): bigint {
 export class BalansController {
   readonly #balans: BalansService;
   readonly #jaarrekening: JaarrekeningService;
+  readonly #afrekening: AfrekeningService;
 
   constructor(@Inject(DATABASE) db: NodePgDatabase) {
     this.#balans = maakBalansService({ db });
     this.#jaarrekening = maakJaarrekeningService({ db });
+    this.#afrekening = maakAfrekeningService({ db });
   }
 
   #eisTenant(verzoek: MetInlog): bigint {
@@ -80,6 +88,7 @@ export class BalansController {
   /** De servicefouten kennen geen HTTP; hier pas de vertaling. */
   #alsHttp(fout: unknown): never {
     if (fout instanceof NietGevondenFout) throw new NotFoundException(fout.message);
+    if (fout instanceof InvoerFout) throw new BadRequestException(fout.message);
     throw fout;
   }
 
@@ -192,5 +201,27 @@ export class BalansController {
       'Content-Disposition': `attachment; filename="${bestandsnaam}"`,
     });
     return new StreamableFile(bytes);
+  }
+
+  /**
+   * Afrekening servicekosten per eenheid (AC9.5), met de pro-rataverdeling bij
+   * een eigenaarswissel binnen het jaar (AC9.6).
+   *
+   * Alleen berekenen en tonen. Het genereren van nota's of creditnota's hieruit
+   * gebeurt pas na goedkeuring in de ALV, en dat is een muterende handeling die
+   * bij A03 (besluitenregister) hoort — niet bij dit leesendpoint.
+   */
+  @Get('afrekening/:boekjaarId')
+  @VereistRecht('boekhouding.lezen')
+  async afrekening(
+    @Req() verzoek: MetInlog,
+    @Param('boekjaarId') boekjaarId: string,
+  ): Promise<Afrekening> {
+    const vveId = this.#eisTenant(verzoek);
+    try {
+      return await this.#afrekening.afrekening(vveId, idUit(boekjaarId, 'boekjaar-id'));
+    } catch (fout: unknown) {
+      return this.#alsHttp(fout);
+    }
   }
 }
