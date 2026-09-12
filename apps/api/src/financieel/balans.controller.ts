@@ -12,6 +12,7 @@
  */
 import {
   BadRequestException,
+  Body,
   Controller,
   ForbiddenException,
   Get,
@@ -19,6 +20,7 @@ import {
   NotFoundException,
   Param,
   Query,
+  Post,
   Req,
   Res,
   StreamableFile,
@@ -51,6 +53,12 @@ import {
   type AfrekeningService,
 } from './afrekening-service.js';
 import { InvoerFout } from './boekhouding.js';
+import {
+  maakAfsluitingService,
+  type AfsluitUitkomst,
+  type AfsluitingService,
+  type KascommissieDossier,
+} from './afsluiting-service.js';
 
 interface MetInlog extends Request {
   inlogContext?: { persoonId: bigint; vveId: bigint | null };
@@ -70,11 +78,13 @@ export class BalansController {
   readonly #balans: BalansService;
   readonly #jaarrekening: JaarrekeningService;
   readonly #afrekening: AfrekeningService;
+  readonly #afsluiting: AfsluitingService;
 
   constructor(@Inject(DATABASE) db: NodePgDatabase) {
     this.#balans = maakBalansService({ db });
     this.#jaarrekening = maakJaarrekeningService({ db });
     this.#afrekening = maakAfrekeningService({ db });
+    this.#afsluiting = maakAfsluitingService({ db });
   }
 
   #eisTenant(verzoek: MetInlog): bigint {
@@ -220,6 +230,81 @@ export class BalansController {
     const vveId = this.#eisTenant(verzoek);
     try {
       return await this.#afrekening.afrekening(vveId, idUit(boekjaarId, 'boekjaar-id'));
+    } catch (fout: unknown) {
+      return this.#alsHttp(fout);
+    }
+  }
+
+  /**
+   * Boekjaar afsluiten (AC9.3): resultaatbestemming, vergrendelen, status.
+   *
+   * `boekjaar.afsluiten` staat op de geldstroomlijst (§8.5), dus hier eist de
+   * RolGuard een tweede factor — dit is de handeling die een jaar definitief
+   * dichtzet.
+   */
+  @Post('boekjaren/:boekjaarId/sluiten')
+  @VereistRecht('boekjaar.afsluiten')
+  async sluitAf(
+    @Req() verzoek: MetInlog,
+    @Param('boekjaarId') boekjaarId: string,
+    @Body() body: { naarReservefondsCent?: unknown },
+  ): Promise<AfsluitUitkomst> {
+    const vveId = this.#eisTenant(verzoek);
+    const persoonId = verzoek.inlogContext?.persoonId;
+    if (persoonId === undefined) throw new ForbiddenException('Geen inlogcontext.');
+    const naar = body.naarReservefondsCent;
+    if (naar !== undefined && (typeof naar !== 'number' || !Number.isInteger(naar))) {
+      throw new BadRequestException('naarReservefondsCent moet een geheel aantal centen zijn.');
+    }
+    try {
+      return await this.#afsluiting.sluitAf(
+        vveId,
+        idUit(boekjaarId, 'boekjaar-id'),
+        naar === undefined ? {} : { naarReservefondsCent: naar },
+        persoonId,
+      );
+    } catch (fout: unknown) {
+      return this.#alsHttp(fout);
+    }
+  }
+
+  /** AC9.7: het kascommissiedossier — boekingen, banksaldi, verklaringen. */
+  @Get('kascommissie/:boekjaarId')
+  @VereistRecht('boekhouding.lezen')
+  async kascommissie(
+    @Req() verzoek: MetInlog,
+    @Param('boekjaarId') boekjaarId: string,
+  ): Promise<KascommissieDossier> {
+    const vveId = this.#eisTenant(verzoek);
+    try {
+      return await this.#afsluiting.kascommissieDossier(vveId, idUit(boekjaarId, 'boekjaar-id'));
+    } catch (fout: unknown) {
+      return this.#alsHttp(fout);
+    }
+  }
+
+  /** AC9.7: aftekenen. Bezwaar is net zo goed een uitkomst als akkoord. */
+  @Post('kascommissie/:boekjaarId/aftekenen')
+  @VereistRecht('boekhouding.aftekenen')
+  async tekenAf(
+    @Req() verzoek: MetInlog,
+    @Param('boekjaarId') boekjaarId: string,
+    @Body() body: { akkoord?: unknown; bevindingen?: unknown },
+  ): Promise<{ id: bigint }> {
+    const vveId = this.#eisTenant(verzoek);
+    const persoonId = verzoek.inlogContext?.persoonId;
+    if (persoonId === undefined) throw new ForbiddenException('Geen inlogcontext.');
+    if (typeof body.akkoord !== 'boolean') {
+      throw new BadRequestException('Veld "akkoord" is verplicht (true of false).');
+    }
+    const bevindingen = typeof body.bevindingen === 'string' ? body.bevindingen : null;
+    try {
+      return await this.#afsluiting.tekenAf(
+        vveId,
+        idUit(boekjaarId, 'boekjaar-id'),
+        { akkoord: body.akkoord, bevindingen },
+        persoonId,
+      );
     } catch (fout: unknown) {
       return this.#alsHttp(fout);
     }

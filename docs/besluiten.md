@@ -2310,3 +2310,39 @@ twee losse perioden in één jaar heeft.
 daarom als `sql<string | null>` getypeerd. ESLint viel eerst over de nullchecks ("de types
 overlappen niet") — terecht, maar de conclusie was omgekeerd: niet de controle was
 overbodig, het type loog. Het type is rechtgezet, de controle blijft staan.
+
+## B10 — Boekjaar afsluiten en kascommissie (12-09-2026)
+
+### De afsluitboeking sluit de resultaatrekeningen écht
+
+Eerste poging boekte alleen het saldo naar `0500` — en gebruikte daarbij dezelfde rekening
+als debet én credit, zodat er per saldo niets gebeurde. De test ving dat meteen. De juiste
+vorm is een echte afsluitboeking: elke baten- en lastenrekening wordt tegen zichzelf
+ingeboekt zodat hij op nul komt, en het verschil landt op het eigen vermogen. Alleen het
+saldo overboeken zou de resultaatrekeningen laten staan, en dan telt het volgende jaar er
+vrolijk overheen.
+
+### Volgorde is hier geen detail
+
+De resultaatboeking hoort ín het jaar dat wordt afgesloten. Die moet dus gebeuren vóór de
+vergrendeling en vóór de statuswissel — anders weigert de boekingsservice hem (§6.7: boeken
+kan alleen in een open jaar) en zou de afsluiting zichzelf blokkeren.
+
+### Een jaar dat niet sluit, sluit niet
+
+Vóór alles wordt de balans getoetst via de jaarrekening. Een boekjaar met een onbalans
+afsluiten betekent die onbalans voor altijd vastleggen; weigeren is dan het enige juiste.
+
+### Doteren kan alleen uit een positief resultaat
+
+`naarReservefondsCent` is standaard nul: een VvE die niets opgeeft doteert niet
+stilzwijgend. Meer doteren dan er aan resultaat is, of doteren uit een verlies, wordt
+geweigerd — dat zou een dotatie uit het eigen vermogen zijn, en dat is een ander besluit
+dan de ALV nam.
+
+### Aftekenen met bezwaar is ook aftekenen
+
+De kascommissie-verklaring heeft een expliciete `akkoord`-vlag náást de bevindingen. Een
+commissie die bezwaren heeft tekent niet blind af, en de ALV moet dat verschil zien zonder
+eerst de bevindingen te hoeven lezen. Opnieuw tekenen overschrijft de eigen verklaring:
+dat is geen fout maar een herziening, bijvoorbeeld nadat een bevinding is opgelost.
