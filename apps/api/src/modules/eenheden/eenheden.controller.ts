@@ -28,12 +28,14 @@ import {
 } from '@nestjs/common';
 import type { Request } from 'express';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
+import { z } from 'zod';
 
 import { DATABASE } from '../../database/database.module.js';
 import { VereistRecht } from '../../gemeenschappelijk/auth/vereist-recht.js';
 import { RolSessieGuard, TenantSessieGuard } from '../../gemeenschappelijk/auth/tenant-guards.js';
 import { SystemKlok } from '../../gemeenschappelijk/system-klok.js';
 import { SessieGuard } from '../auth/sessie.guard.js';
+import { ZodValidationPipe } from '../../gemeenschappelijk/validatie/zod-pipe.js';
 import {
   InvoerFout,
   NietGevondenFout,
@@ -41,6 +43,12 @@ import {
   type EenheidInvoer,
   type EenhedenService,
 } from './eenheden.service.js';
+import { maakImportService, type ImportService } from './import-service.js';
+import { LogVerzender } from '../../financieel/log-verzender.js';
+import {
+  maakMailService,
+  type MailServiceInterface,
+} from '../../gemeenschappelijk/mail/mail-service.js';
 
 interface MetInlog extends Request {
   inlogContext?: { persoonId: bigint; vveId: bigint | null; mfaGeauthenticeerd: boolean };
@@ -65,9 +73,20 @@ function alsHttp(fout: unknown): never {
 @UseGuards(SessieGuard, TenantSessieGuard, RolSessieGuard)
 export class EenhedenController {
   readonly #service: EenhedenService;
+  readonly #import: ImportService;
 
   constructor(@Inject(DATABASE) db: NodePgDatabase) {
     this.#service = maakEenhedenService({ db, klok: new SystemKlok() });
+    const verzender = new LogVerzender();
+    const mail: MailServiceInterface = maakMailService({ db, verzender });
+    this.#import = maakImportService({
+      db,
+      klok: new SystemKlok(),
+      registratieBasis: process.env['REGISTRATIE_BASIS'] ?? 'https://vve.example.nl/registratie',
+      verzendMail: async (aan, onderwerp, tekst) => {
+        await mail.zetInWachtrij({ vveId: null, ontvangerEmail: aan, onderwerp, tekst });
+      },
+    });
   }
 
   /** De tenant uit het token; een afwijkende id in de request is een fout (§7.5). */
@@ -138,6 +157,55 @@ export class EenhedenController {
     try {
       await this.#service.wijzigEenheid(vveId, idUit(id, 'eenheid-id'), body, persoonId);
       return { ok: true };
+    } catch (fout: unknown) {
+      return alsHttp(fout);
+    }
+  }
+
+  // -- V06: bulk-import (AC2.7) --------------------------------------------
+
+  /** Het voorbeeldbestand (AC2.7) als tekst — hetzelfde model de parser leest. */
+  @Get('import/voorbeeld')
+  @VereistRecht('eenheid.lezen')
+  importVoorbeeld(): unknown {
+    return { csv: this.#import.voorbeeldCsv() };
+  }
+
+  private static readonly IMPORT_SCHEMA = z
+    .object({
+      bestand: z.object({
+        /** De CSV- of XLSX-inhoud als base64 (strak Zod: test #30). */
+        inhoud: z.string().min(1),
+      }),
+      /** false (default) = dry-run-rapport; true = daadwerkelijk uitvoeren. */
+      uitvoeren: z.boolean().optional(),
+    })
+    .strict();
+
+  /** AC2.7: valideer (dry-run) of uitvoeren, met per-rij-rapport. */
+  @Post('import')
+  @VereistRecht('eenheid.wijzigen')
+  async importeren(
+    @Req() verzoek: MetInlog,
+    @Body(new ZodValidationPipe(EenhedenController.IMPORT_SCHEMA))
+    body: { bestand: { inhoud: string }; uitvoeren?: boolean },
+  ): Promise<unknown> {
+    const { vveId, persoonId } = this.#eisTenant(verzoek);
+    let bytes: Buffer;
+    try {
+      bytes = Buffer.from(body.bestand.inhoud, 'base64');
+    } catch {
+      throw new BadRequestException('De bestandsinhoud is geen geldige base64.');
+    }
+    if (bytes.length === 0) {
+      throw new BadRequestException('Leeg bestand (0 bytes) kan niet worden geïmporteerd.');
+    }
+    try {
+      return await this.#import.verwerk(
+        vveId,
+        { bytes, uitvoeren: body.uitvoeren === true },
+        persoonId,
+      );
     } catch (fout: unknown) {
       return alsHttp(fout);
     }

@@ -2101,4 +2101,39 @@ dependency-vrije ZIP-formaat volgt het G07-PDF-patroon in het verzend-blok. PDF-
 extractie en volledig-tekstzoeken over de inhoud is X03 (fase 7); het zoeken hier werkt
 op titel, categorie, jaar en tags. ALV- en MJOP-koppelingen (AC3.4) zijn plain kolommen —
 ze krijgen hun FK bij de blokken die die tabellen leveren (A05-patroon: geen dode FK's).
+
+## V06 — Bulk-import (12-09-2026)
+
+### Tabel-lezer dependency-vrij: CSV én XLSX met Node-kern
+
+Het G07-PDF-besluit (leesbare minimale schrijver boven een grote bibliotheek) is hier de
+leesvorm: `tabel-lezer.ts` parst CSV volgens RFC 4180 (quote-aware statemachine, scheiding
+`,`/`;` automatisch op de kopregel) en XLSX als ZIP-van-XML — handmatige lokale-header-
+walk, uitsluitend stored/deflate (andere methodes geweigerd), decompressie met
+`zlib.inflateRawSync` (Node-kern), gedeelde strings + cel-walker met Excel-kolomletters
+(A=0, AA=26). Geen 1,5 MB-parser voor één formaat. Beide formaten leveren dezelfde
+koppen+rijen-vorm, zodat de import één pad kent.
+
+### Validatie vooraf, dry-run, dan pas schrijven
+
+De flow volgt AC2.7 letterlijk: kolomtoets (verplichte koppen) + per-rij veldtoetsen met
+foutverzameling (niet eerste-gooien) — zonder te schrijven. Het dry-run-rapport beschrijft
+per rij de actie die hij zou doen; `uitvoeren: true` is een bewuste tweede beslissing met
+dezelfde invoer. Misvormde testrijen (te weinig kolommen) hebben twee rondes gekost: de
+import weigerde ze terecht (kolomshift zette een e-mail op `breukdeel_noemer`) — de
+service deugt, de testrijen moesten kloppen.
+
+### Geen personen door de import; idempotente koppelingen
+
+De import leest e-mail/naam/rol; wie het adres nog niet heeft krijgt de gewone V04-
+uitnodiging (opak token, F10-wachtrij) — het token ís de autorisatie, en de registratie-
+flow (F06) blijft de enige plek waar personen met wachtwoorden ontstaan. Bestaande
+personen worden idempotent gekoppeld (geen dubbele lopende rij), bestaande eenheden bij
+code hergebruikt: een tweede run is een no-op op db-niveau.
+
+### Bewust-niet-doen
+
+Rol `bewoner` in de import volgt later (AC2.6-register); de kolommen `eigenaar_*` zijn
+nu eigenaar-only. XLSX-sheets vóór sheet1, datumceltypen en formules worden bewust niet
+gelezen — het import-model is de CSV-kolomlijst; wie meer nodig heeft exporteert CSV.
 De client-kant van de documenten volgt in V07 (eigenaarsportaal).

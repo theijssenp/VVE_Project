@@ -59,7 +59,7 @@ Zonder deze blokken kan er niets anders gebouwd worden. F03 t/m F09 zijn de drag
 | V03 | Eigenaarschap met `daterange`, exclusion constraint, meerdere eigenaren, eigenaarswissel met verrekenoverzicht voor de notaris | L | V02 | M2 · AC2.4–2.5, test 34 | **klaar** |
 | V04 | Uitnodigingen: token, verlopen, opnieuw versturen, registratie- en activatieflow, bestaande persoon koppelen | M | V01 | §3.3 · AC2.2 | **klaar** |
 | V05 | Documenten: upload met MIME-detectie, opslag buiten de webroot, zichtbaarheid, download-endpoint, versiebeheer, zoeken | L | F08 | M3 · AC3.1–3.7 | **klaar** |
-| V06 | CSV/XLSX-import van eenheden en eigenaren met validatie vooraf en dry-run-rapport | M | V03 | M2 · AC2.7 | todo |
+| V06 | CSV/XLSX-import van eenheden en eigenaren met validatie vooraf en dry-run-rapport | M | V03 | M2 · AC2.7 | **klaar** |
 | V07 | Eigenaarsportaal v1: eigen eenheid, documenten, mededelingen, eigen gegevens | M | F11, V05 | M14 · AC14.1–14.3 | todo |
 
 ## 4. Fase 2 — Begroting, bijdragen en nota's (overboeking)
@@ -180,7 +180,7 @@ AES-GCM.
 | | Aantal |
 |---|---|
 | Blokken totaal | 71 |
-| Klaar | 31 |
+| Klaar | 32 |
 | Bezig | 0 |
 
 Statuswaarden: `todo` · `bezig` · `klaar` · `overgeslagen`.
