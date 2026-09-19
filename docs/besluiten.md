@@ -2440,3 +2440,37 @@ het soort dubbeling dat pas bij de jaarafsluiting opvalt.
 De opslaanbare boekingsregels (AC7.5) vergelijken op een eenvoudige bevat-toets. Wie hier
 een regex mag invoeren, kan met één verkeerd teken de hele werkbak leegvegen naar één
 kostenrekening.
+
+## Eigenaarstoegang zonder mail (bij V02/V03/V04)
+
+**Besluit.** De VvE-beheerder maakt het eigenaarsaccount zelf aan met een
+wachtwoord uit de CSPRNG van de server, en geeft dat persoonlijk door. Er wordt
+géén uitnodigingsmail met activatielink gebruikt.
+
+**Waarom.** De uitnodigingsflow van V04 is compleet, maar het ruwe token
+verlaat de service alleen via de mail: de controller strípt het uit het
+antwoord aan de beheerder en de LogVerzender houdt de link bewust uit het log.
+Zolang SMTP geblokkeerd is, komt de link daarmee nergens terecht en kan de
+eigenaar nooit inloggen. Dit volgt de werkwijze die §3.3/AC1.3 al voor het
+beheerderswachtwoord voorschrijft.
+
+**Wat dit kost.** De beheerder kent tijdelijk het wachtwoord van de eigenaar.
+Dat is afgedekt met `wachtwoord_wijzigen_verplicht` op het account en een
+auditregel (`eigenaar.account_uitgegeven`) zonder het wachtwoord zelf.
+
+**Terugdraaien.** Zodra SMTP werkt, is de uitnodigingsflow van V04 het betere
+pad; dit blijft dan bestaan als het spoor voor "eigenaar is zijn wachtwoord
+kwijt en heeft geen werkend e-mailadres".
+
+## Rechtenmatrix: alleen eigenaar en bewoner dichtgezet
+
+**Besluit.** `rolHeeftRecht` beperkt `eigenaar` en `bewoner` tot het
+eigenaarsportaal. De bestuursrollen (beheerder, voorzitter, penningmeester,
+secretaris, bestuurslid, kascommissie) houden volledige toegang binnen hun VvE.
+
+**Waarom niet meer.** De spec wil in §3.1 ook dat een bestuurslid geen
+gebruikersbeheer doet, een penningmeester geen incassobestanden definitief
+maakt en een kascommissielid alleen leest. Dat is een eigen blok waard, met
+tests per rol; het meeliften op een blok over eigenaarstoegang zou die
+scheiding ongetest en ongezien invoeren. De eigenaar/bewoner-grens moest nú,
+omdat er eigenaarsaccounts uitgedeeld gaan worden.
