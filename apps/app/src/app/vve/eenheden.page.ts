@@ -22,6 +22,7 @@ import {
   IonButtons,
   IonCard,
   IonCardContent,
+  IonCheckbox,
   IonCardHeader,
   IonCardSubtitle,
   IonCardTitle,
@@ -41,12 +42,21 @@ import {
 
 import type { ApiFout } from '../kern/fout.js';
 import { AuthService } from '../kern/auth.service.js';
-import { EenhedenService, type EenhedenOverzicht, type EenheidInvoer } from './eenheden.service.js';
+import {
+  EenhedenService,
+  type EenhedenOverzicht,
+  type EenheidInvoer,
+  type EigenaarAccountInvoer,
+} from './eenheden.service.js';
 
 const TYPEN = ['woning', 'parkeerplaats', 'berging', 'bedrijfsruimte', 'gemeenschappelijk'];
 
 function leegInvoer(): EenheidInvoer {
   return { code: '', type: 'woning' };
+}
+
+function leegEigenaar(): EigenaarAccountInvoer {
+  return { email: '', achternaam: '', wachtwoord: '', aandeelPromille: 1000 };
 }
 
 @Component({
@@ -59,6 +69,7 @@ function leegInvoer(): EenheidInvoer {
     IonButtons,
     IonCard,
     IonCardContent,
+    IonCheckbox,
     IonCardHeader,
     IonCardSubtitle,
     IonCardTitle,
@@ -138,6 +149,100 @@ function leegInvoer(): EenheidInvoer {
                   </ion-label>
                 </ion-item>
               </ion-list>
+
+              @if (uitgereikt(); as u) {
+                @if (u.eenheidId === e.id) {
+                  <!--
+                    De inloggegevens staan hier één keer, want ze zijn nergens
+                    anders op te halen: er gaat geen mail uit zolang SMTP niet
+                    werkt, en het wachtwoord is in de database alleen als hash
+                    aanwezig. Kwijt is kwijt — dan opnieuw uitreiken.
+                  -->
+                  <ion-note color="success">
+                    <p>
+                      <strong>Toegang aangemaakt voor {{ e.code }}.</strong>
+                    </p>
+                    <p>Gebruikersnaam: {{ u.email }}</p>
+                    <p>Wachtwoord: {{ u.wachtwoord }}</p>
+                    <p>
+                      Geef dit persoonlijk door. Het wordt hierna niet meer getoond en de eigenaar
+                      moet het bij de eerste inlog zelf wijzigen.
+                    </p>
+                  </ion-note>
+                }
+              }
+
+              @if (openEenheidId() === e.id) {
+                <form (ngSubmit)="geefToegang(e.id)">
+                  <ion-input
+                    label="E-mailadres van de eigenaar"
+                    labelPlacement="stacked"
+                    fill="outline"
+                    type="email"
+                    [name]="'email-' + e.id"
+                    [ngModel]="eigenaarModel().email"
+                    (ngModelChange)="zetEigenaarVeld('email', $event)"
+                    required
+                  ></ion-input>
+                  <ion-input
+                    label="Achternaam"
+                    labelPlacement="stacked"
+                    fill="outline"
+                    [name]="'achternaam-' + e.id"
+                    [ngModel]="eigenaarModel().achternaam"
+                    (ngModelChange)="zetEigenaarVeld('achternaam', $event)"
+                    required
+                  ></ion-input>
+                  <ion-input
+                    label="Voornaam (optioneel)"
+                    labelPlacement="stacked"
+                    fill="outline"
+                    [name]="'voornaam-' + e.id"
+                    [ngModel]="eigenaarModel().voornaam"
+                    (ngModelChange)="zetEigenaarVeld('voornaam', $event)"
+                  ></ion-input>
+                  <ion-input
+                    label="Wachtwoord"
+                    labelPlacement="stacked"
+                    fill="outline"
+                    [name]="'wachtwoord-' + e.id"
+                    [ngModel]="eigenaarModel().wachtwoord"
+                    (ngModelChange)="zetEigenaarVeld('wachtwoord', $event)"
+                    required
+                  ></ion-input>
+                  <ion-button size="small" fill="clear" type="button" (click)="nieuwVoorstel()">
+                    Ander wachtwoord voorstellen
+                  </ion-button>
+                  <ion-input
+                    label="Aandeel in promille"
+                    labelPlacement="stacked"
+                    fill="outline"
+                    type="number"
+                    [name]="'aandeel-' + e.id"
+                    [ngModel]="eigenaarModel().aandeelPromille"
+                    (ngModelChange)="zetEigenaarVeld('aandeelPromille', $event)"
+                  ></ion-input>
+                  <ion-item>
+                    <ion-checkbox
+                      [name]="'primair-' + e.id"
+                      [ngModel]="eigenaarModel().isPrimairContact"
+                      (ngModelChange)="zetEigenaarVeld('isPrimairContact', $event)"
+                    >
+                      Primair contact voor de nota's
+                    </ion-checkbox>
+                  </ion-item>
+                  <ion-button expand="block" [disabled]="bezig()" type="submit">
+                    Toegang aanmaken
+                  </ion-button>
+                  <ion-button expand="block" fill="clear" type="button" (click)="sluitFormulier()">
+                    Annuleren
+                  </ion-button>
+                </form>
+              } @else {
+                <ion-button expand="block" fill="outline" (click)="openFormulier(e.id)">
+                  Eigenaar toegang geven
+                </ion-button>
+              }
             </ion-card-content>
           </ion-card>
         } @empty {
@@ -216,6 +321,34 @@ export class EenhedenPage {
   /** Zodat ngModel met nummerinvoer omgaat zonder lege-string-crashes. */
   invoerModel = leegInvoer();
 
+  /** Welke eenheidskaart heeft het toegangsformulier open? Er is er één tegelijk. */
+  readonly openEenheidId = signal<string | null>(null);
+
+  /**
+   * Een signal, geen gewoon veld: het wachtwoordvoorstel komt ná een
+   * serveraanroep binnen, en dan moet het veld zichzelf bijwerken. Met een
+   * gewone toewijzing bleef de invoer leeg staan.
+   */
+  readonly eigenaarModel = signal<EigenaarAccountInvoer>(leegEigenaar());
+
+  zetEigenaarVeld<S extends keyof EigenaarAccountInvoer>(
+    sleutel: S,
+    waarde: EigenaarAccountInvoer[S],
+  ): void {
+    this.eigenaarModel.update((huidig) => ({ ...huidig, [sleutel]: waarde }));
+  }
+
+  /**
+   * De uitgereikte inloggegevens, om ze één keer te kunnen tonen. Ze staan
+   * bewust alleen in het geheugen van dit scherm: de server bewaart het
+   * wachtwoord als hash en er is geen tweede kans om het op te halen.
+   */
+  readonly uitgereikt = signal<{
+    eenheidId: string;
+    email: string;
+    wachtwoord: string;
+  } | null>(null);
+
   constructor() {
     void this.laad();
   }
@@ -233,6 +366,53 @@ export class EenhedenPage {
       } else {
         await this.#auth.kiesActieveVve(gekozen);
       }
+      this.overzicht.set(await this.#service.lijst());
+    } catch (e) {
+      this.fout.set(e as ApiFout);
+    } finally {
+      this.bezig.set(false);
+    }
+  }
+
+  /**
+   * Opent het formulier en haalt meteen een wachtwoordvoorstel op. Het voorstel
+   * komt van de server: de CSPRNG en de sterkte-eisen staan daar (F12), en een
+   * wachtwoord dat de browser verzint zou langs die eisen heen kunnen.
+   */
+  async openFormulier(eenheidId: string): Promise<void> {
+    this.eigenaarModel.set(leegEigenaar());
+    this.uitgereikt.set(null);
+    this.fout.set(null);
+    this.openEenheidId.set(eenheidId);
+    await this.nieuwVoorstel();
+  }
+
+  sluitFormulier(): void {
+    this.openEenheidId.set(null);
+    this.eigenaarModel.set(leegEigenaar());
+  }
+
+  async nieuwVoorstel(): Promise<void> {
+    try {
+      const { wachtwoord } = await this.#service.wachtwoordVoorstel();
+      this.zetEigenaarVeld('wachtwoord', wachtwoord);
+    } catch (e) {
+      this.fout.set(e as ApiFout);
+    }
+  }
+
+  async geefToegang(eenheidId: string): Promise<void> {
+    const velden = this.eigenaarModel();
+    if (velden.email.trim() === '' || velden.achternaam.trim() === '') return;
+    this.bezig.set(true);
+    this.fout.set(null);
+    try {
+      await this.#service.maakEigenaarAccount(eenheidId, velden);
+      // Eerst vasthouden, dán het formulier leegmaken: hierna is het
+      // wachtwoord nergens meer op te vragen.
+      this.uitgereikt.set({ eenheidId, email: velden.email, wachtwoord: velden.wachtwoord });
+      this.openEenheidId.set(null);
+      this.eigenaarModel.set(leegEigenaar());
       this.overzicht.set(await this.#service.lijst());
     } catch (e) {
       this.fout.set(e as ApiFout);

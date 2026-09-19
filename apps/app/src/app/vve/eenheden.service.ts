@@ -67,6 +67,21 @@ export interface EenheidInvoer {
   kadastraleAanduiding?: string;
 }
 
+export interface EigenaarAccountInvoer {
+  email: string;
+  achternaam: string;
+  voornaam?: string;
+  wachtwoord: string;
+  aandeelPromille?: number;
+  isPrimairContact?: boolean;
+}
+
+export interface EigenaarAccountResultaat {
+  readonly persoonId: string;
+  readonly bestaandPersoon: boolean;
+  readonly alEigenaar: boolean;
+}
+
 @Injectable({ providedIn: 'root' })
 export class EenhedenService {
   readonly #http = inject(HttpClient);
@@ -79,6 +94,26 @@ export class EenhedenService {
   maak(eenheid: EenheidInvoer): Promise<{ eenheidId: string }> {
     return firstValueFrom(
       this.#http.post<{ eenheidId: string }>(`${this.#basis}/vve-mij`, { eenheid }),
+    );
+  }
+
+  /** Een wachtwoordvoorstel uit de CSPRNG van de server (nooit uit de browser). */
+  wachtwoordVoorstel(): Promise<{ wachtwoord: string }> {
+    return firstValueFrom(
+      this.#http.get<{ wachtwoord: string }>(`${this.#basis}/vve-mij/wachtwoord-voorstel`),
+    );
+  }
+
+  /** Geeft een eigenaar toegang tot deze eenheid (account + rol + koppeling). */
+  maakEigenaarAccount(
+    eenheidId: string,
+    invoer: EigenaarAccountInvoer,
+  ): Promise<EigenaarAccountResultaat> {
+    return firstValueFrom(
+      this.#http.post<EigenaarAccountResultaat>(
+        `${this.#basis}/vve-mij/eenheid/${eenheidId}/eigenaar`,
+        invoer,
+      ),
     );
   }
 }
