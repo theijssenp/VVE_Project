@@ -87,7 +87,7 @@ services:
       # Toegangslogs overleven `docker compose down` (spec §7.9: logkanalen).
       - caddy_logs:/var/log/caddy
     healthcheck:
-      test: ['CMD', 'wget', '--spider', '-q', 'http://127.0.0.1/health']
+      test: ['CMD', 'wget', '--spider', '-q', 'http://127.0.0.1/api/health']
       interval: 30s
       timeout: 5s
       retries: 3

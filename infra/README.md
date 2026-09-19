@@ -33,7 +33,7 @@ docker compose --env-file .env -f infra/docker-compose.yml config
 # 3. Opstarten en controleren:
 docker compose --env-file .env -f infra/docker-compose.yml up -d --build
 # wacht tot de healthchecks groen zijn, daarna:
-curl -s http://localhost/health
+curl -s http://localhost/api/health
 # verwacht: {"status":"ok"}  (via Caddy, die doorstuurt naar api:3000)
 
 # 4. Stoppen (volumes blijven behouden):
@@ -65,7 +65,7 @@ volume. Wijzig je het wachtwoord van een bestaande database, doe dat dan met
   **Caddy** is de enige service met een poort naar buiten (80).
 - De api-container draait als de ingebouwde **`node`**-gebruiker (UID 1000), niet als root.
 - Alle services draaien met `no-new-privileges` en met een healthcheck. De api gebruikt
-  het bestaande `GET /health`; die healthcheck staat alleen in de Dockerfile, zodat er
+  het bestaande `GET /api/health`; die healthcheck staat alleen in de Dockerfile, zodat er
   niet twee definities uit elkaar kunnen lopen.
 - `caddy_data` bewaart de TLS-certificaten. Zonder dat volume vraagt Caddy bij elke
   herstart nieuwe certificaten aan en loop je tegen de Let's Encrypt-limieten.
