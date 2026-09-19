@@ -3,6 +3,13 @@
   <head>
     <meta charset="utf-8" />
     <title>VvE-portaal</title>
+    <!--
+      Verplicht bij routes van meer dan één segment. De builder zet de
+      scripttags met een relatief pad ("main.js"); zonder base href lost de
+      browser die op /vve/eenheden op als /vve/main.js en krijgt een 503 —
+      een wit scherm bij elke F5 of rechtstreeks geopende diepe link.
+    -->
+    <base href="/" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   </head>
   <body>
