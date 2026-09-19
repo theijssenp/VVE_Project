@@ -189,4 +189,164 @@ describe('Wooneenheden (V02, §6.4)', () => {
       ),
     ).rejects.toThrow(InvoerFout);
   });
+
+  // -- Eigenaarstoegang (§3.1, §3.3 · AC2.4) --------------------------------
+
+  it('geeft een eigenaar toegang: account, rol eigenaar en koppeling aan de eenheid', async () => {
+    if (!db || !service) throw new Error('geen setup');
+    const { vveId, persoonId: beheerder } = await seedVveMetBeheerder();
+    const { eenheidId } = await service.maakEenheid(vveId, { code: 'E-01' }, null);
+    const email = `eigenaar-${String(Date.now())}@test.vve`;
+
+    const uit = await service.maakEigenaarAccount(
+      vveId,
+      eenheidId,
+      {
+        email,
+        achternaam: 'Jansen',
+        voornaam: 'Ada',
+        wachtwoord: 'Zeewier-Kantoor-9174!',
+        aandeelPromille: 1000,
+        isPrimairContact: true,
+      },
+      beheerder,
+    );
+    expect(uit.bestaandPersoon).toBe(false);
+    expect(uit.alEigenaar).toBe(false);
+
+    // De persoon bestaat, met hash en niet in platte tekst (§7.6).
+    const { rows: personen } = await db.pool.query<{
+      wachtwoord_hash: string;
+      wachtwoord_wijzigen_verplicht: boolean;
+    }>('SELECT wachtwoord_hash, wachtwoord_wijzigen_verplicht FROM persoon WHERE id = $1', [
+      String(uit.persoonId),
+    ]);
+    expect(personen[0]?.wachtwoord_hash).toMatch(/^\$argon2id\$/);
+    expect(personen[0]?.wachtwoord_wijzigen_verplicht).toBe(true);
+
+    // De rol bepaalt sinds de rechtenmatrix wat hij mag: eigenaar, niet beheerder.
+    const { rows: rollen } = await db.pool.query<{ rol: string }>(
+      'SELECT rol FROM rol_toewijzing WHERE vve_id = $1 AND persoon_id = $2',
+      [String(vveId), String(uit.persoonId)],
+    );
+    expect(rollen.map((r) => r.rol)).toEqual(['eigenaar']);
+
+    // En de eenheid staat op zijn naam.
+    const overzicht = await service.lijst(vveId);
+    const rij = overzicht.eenheden.find((e) => e.id === eenheidId);
+    expect(rij?.eigenaren.map((e) => e.persoonId)).toEqual([uit.persoonId]);
+    expect(rij?.eigenaren[0]?.isPrimairContact).toBe(true);
+  });
+
+  it('een bestaand e-mailadres wordt hergebruikt; nogmaals koppelen dupliceert niet', async () => {
+    if (!db || !service) throw new Error('geen setup');
+    const { vveId, persoonId: beheerder } = await seedVveMetBeheerder();
+    const { eenheidId } = await service.maakEenheid(vveId, { code: 'E-02' }, null);
+    const email = `hergebruik-${String(Date.now())}@test.vve`;
+    const invoer = {
+      email,
+      achternaam: 'Bakker',
+      wachtwoord: 'Zeewier-Kantoor-9174!',
+      aandeelPromille: 1000,
+    };
+
+    const eerste = await service.maakEigenaarAccount(vveId, eenheidId, invoer, beheerder);
+    expect(eerste.bestaandPersoon).toBe(false);
+
+    // Tweede keer: dit is het pad "eigenaar is zijn wachtwoord kwijt". Dezelfde
+    // persoon, nieuw wachtwoord, geen tweede eigenaarschapsrij — de exclusion
+    // constraint op periode zou die ook weigeren.
+    const tweede = await service.maakEigenaarAccount(
+      vveId,
+      eenheidId,
+      { ...invoer, wachtwoord: 'Gierzwaluw-Tafel-3382!' },
+      beheerder,
+    );
+    expect(tweede.persoonId).toBe(eerste.persoonId);
+    expect(tweede.bestaandPersoon).toBe(true);
+    expect(tweede.alEigenaar).toBe(true);
+
+    const { rows } = await db.pool.query<{ aantal: string }>(
+      'SELECT count(*)::text AS aantal FROM eigenaarschap WHERE wooneenheid_id = $1',
+      [String(eenheidId)],
+    );
+    expect(rows[0]?.aantal).toBe('1');
+
+    const overzicht = await service.lijst(vveId);
+    const rij = overzicht.eenheden.find((e) => e.id === eenheidId);
+    expect(rij?.eigenaren).toHaveLength(1);
+  });
+
+  it('weigert een te zwak wachtwoord (F12/§7.6)', async () => {
+    if (!db || !service) throw new Error('geen setup');
+    const { vveId, persoonId: beheerder } = await seedVveMetBeheerder();
+    const { eenheidId } = await service.maakEenheid(vveId, { code: 'E-03' }, null);
+    await expect(
+      service.maakEigenaarAccount(
+        vveId,
+        eenheidId,
+        { email: 'zwak@test.vve', achternaam: 'Zwak', wachtwoord: 'geheim' },
+        beheerder,
+      ),
+    ).rejects.toThrow(InvoerFout);
+  });
+
+  it('weigert een tweede eigenaar op 1000 promille met een leesbare fout, geen 500', async () => {
+    if (!db || !service) throw new Error('geen setup');
+    const { vveId, persoonId: beheerder } = await seedVveMetBeheerder();
+    // Zoals het scherm het doet: de eenheid koppelt de beheerder meteen als
+    // volledig eigenaar (AC2.1). Een tweede 1000-promille-eigenaar botst dan
+    // op `geen_dubbel_volledig_eigendom` — 200% eigendom bestaat niet.
+    const { eenheidId } = await service.maakEenheid(
+      vveId,
+      { code: 'E-05' },
+      { persoonId: beheerder, aandeelPromille: 1000 },
+    );
+    await expect(
+      service.maakEigenaarAccount(
+        vveId,
+        eenheidId,
+        {
+          email: `tweede-${String(Date.now())}@test.vve`,
+          achternaam: 'Tweede',
+          wachtwoord: 'Zeewier-Kantoor-9174!',
+          aandeelPromille: 1000,
+        },
+        beheerder,
+      ),
+    ).rejects.toThrow(InvoerFout);
+
+    // Met ruimte in het aandeel kan het wél: twee eigenaren van elk de helft.
+    const uit = await service.maakEigenaarAccount(
+      vveId,
+      eenheidId,
+      {
+        email: `helft-${String(Date.now())}@test.vve`,
+        achternaam: 'Helft',
+        wachtwoord: 'Zeewier-Kantoor-9174!',
+        aandeelPromille: 500,
+      },
+      beheerder,
+    );
+    expect(uit.alEigenaar).toBe(false);
+  });
+
+  it('weigert een eenheid uit een andere VvE (tenantcontrole)', async () => {
+    if (!db || !service) throw new Error('geen setup');
+    const a = await seedVveMetBeheerder();
+    const b = await seedVveMetBeheerder();
+    const { eenheidId } = await service.maakEenheid(b.vveId, { code: 'E-04' }, null);
+    await expect(
+      service.maakEigenaarAccount(
+        a.vveId,
+        eenheidId,
+        {
+          email: `vreemd-${String(Date.now())}@test.vve`,
+          achternaam: 'Vreemd',
+          wachtwoord: 'Zeewier-Kantoor-9174!',
+        },
+        a.persoonId,
+      ),
+    ).rejects.toThrow(NietGevondenFout);
+  });
 });

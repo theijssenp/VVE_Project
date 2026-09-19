@@ -32,6 +32,7 @@ import { z } from 'zod';
 
 import { DATABASE } from '../../database/database.module.js';
 import { VereistRecht } from '../../gemeenschappelijk/auth/vereist-recht.js';
+import { genereerWachtwoord } from '../../gemeenschappelijk/auth/wachtwoord-generator.js';
 import { RolSessieGuard, TenantSessieGuard } from '../../gemeenschappelijk/auth/tenant-guards.js';
 import { SystemKlok } from '../../gemeenschappelijk/system-klok.js';
 import { SessieGuard } from '../auth/sessie.guard.js';
@@ -157,6 +158,73 @@ export class EenhedenController {
     try {
       await this.#service.wijzigEenheid(vveId, idUit(id, 'eenheid-id'), body, persoonId);
       return { ok: true };
+    } catch (fout: unknown) {
+      return alsHttp(fout);
+    }
+  }
+
+  // -- Eigenaarstoegang (spec §3.1, §3.3 · AC2.4) --------------------------
+
+  /** Lengte van een voorgesteld wachtwoord; gelijk aan het seed-script en V01. */
+  private static readonly VOORSTEL_LENGTE = 20;
+
+  /**
+   * Een wachtwoordvoorstel uit de CSPRNG van de server, voor het formulier
+   * waarmee de beheerder een eigenaar toegang geeft. Staat vóór `:id`, anders
+   * vangt de `@Patch(':id')`-route dit pad af.
+   *
+   * Het voorstel wordt nergens bewaard: pas bij het opslaan gaat de hash de
+   * database in. Zelfde patroon als `vve/wachtwoord-voorstel` (V01).
+   */
+  @Get('wachtwoord-voorstel')
+  @VereistRecht('eigenaar.account_beheren')
+  wachtwoordVoorstel(@Req() verzoek: MetInlog): { wachtwoord: string } {
+    this.#eisTenant(verzoek);
+    return { wachtwoord: genereerWachtwoord(EenhedenController.VOORSTEL_LENGTE) };
+  }
+
+  private static readonly EIGENAAR_SCHEMA = z
+    .object({
+      email: z.string().min(1),
+      achternaam: z.string().min(1),
+      voornaam: z.string().optional(),
+      wachtwoord: z.string().min(1),
+      aandeelPromille: z.number().int().optional(),
+      isPrimairContact: z.boolean().optional(),
+    })
+    .strict();
+
+  /**
+   * Geeft een eigenaar toegang tot deze eenheid: account met wachtwoord, rol
+   * `eigenaar` en de eigenaarschapskoppeling.
+   *
+   * Geen uitnodigingsmail: die loopt dood zolang SMTP niet werkt. De beheerder
+   * vult het wachtwoord in en geeft het zelf door — dezelfde werkwijze die de
+   * applicatiebeheerder voor het beheerdersaccount gebruikt (AC1.3).
+   */
+  @Post('eenheid/:eenheidId/eigenaar')
+  @VereistRecht('eigenaar.account_beheren')
+  async maakEigenaarAccount(
+    @Req() verzoek: MetInlog,
+    @Param('eenheidId') eenheidId: string,
+    @Body(new ZodValidationPipe(EenhedenController.EIGENAAR_SCHEMA))
+    body: {
+      email: string;
+      achternaam: string;
+      voornaam?: string;
+      wachtwoord: string;
+      aandeelPromille?: number;
+      isPrimairContact?: boolean;
+    },
+  ): Promise<unknown> {
+    const { vveId, persoonId } = this.#eisTenant(verzoek);
+    try {
+      return await this.#service.maakEigenaarAccount(
+        vveId,
+        idUit(eenheidId, 'eenheid-id'),
+        body,
+        persoonId,
+      );
     } catch (fout: unknown) {
       return alsHttp(fout);
     }

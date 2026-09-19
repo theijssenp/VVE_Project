@@ -29,6 +29,7 @@ import { rolToewijzing } from '../../database/schema/rol-toewijzing.js';
 import { vve } from '../../database/schema/vve.js';
 import { wooneenheid } from '../../database/schema/wooneenheid.js';
 import { maakAuditService } from '../../gemeenschappelijk/audit/audit-service.js';
+import { beoordeelWachtwoord, hashWachtwoord } from '../../gemeenschappelijk/auth/wachtwoord.js';
 import type { Klok } from '../../gemeenschappelijk/system-klok.js';
 import { inTenantTransactie } from '../../gemeenschappelijk/tenant/tenant-context.js';
 
@@ -131,6 +132,37 @@ export interface EenhedenService {
     velden: Partial<EenheidInvoer>,
     doorPersoonId: bigint,
   ): Promise<void>;
+  maakEigenaarAccount(
+    vveId: bigint,
+    eenheidId: bigint,
+    velden: EigenaarAccountInvoer,
+    doorPersoonId: bigint,
+  ): Promise<EigenaarAccountResultaat>;
+}
+
+/**
+ * De gegevens die de beheerder invult om een eigenaar toegang te geven.
+ *
+ * Het wachtwoord komt hier uit het formulier van de beheerder en niet uit een
+ * mail met een activatielink: zolang SMTP niet bruikbaar is, geeft de beheerder
+ * het zelf door — precies zoals de applicatiebeheerder dat bij het
+ * beheerdersaccount doet (§3.3, AC1.3).
+ */
+export interface EigenaarAccountInvoer {
+  readonly email: string;
+  readonly achternaam: string;
+  readonly voornaam?: string | undefined;
+  readonly wachtwoord: string;
+  readonly aandeelPromille?: number | undefined;
+  readonly isPrimairContact?: boolean | undefined;
+}
+
+export interface EigenaarAccountResultaat {
+  readonly persoonId: bigint;
+  /** Bestond dit e-mailadres al als persoon? Dan is het wachtwoord vervangen. */
+  readonly bestaandPersoon: boolean;
+  /** Was deze persoon al eigenaar van deze eenheid? Dan is er niets gekoppeld. */
+  readonly alEigenaar: boolean;
 }
 
 export interface EenhedenServiceConfig {
@@ -147,6 +179,15 @@ function verplichteTekst(waarde: unknown, veld: string): string {
     throw new InvoerFout(`Veld "${veld}" is verplicht.`);
   }
   return waarde.trim();
+}
+
+/** Zelfde ruime controle als de vve-service: de echte toets is of post aankomt. */
+function geldigEmail(waarde: unknown): string {
+  const tekst = verplichteTekst(waarde, 'e-mailadres');
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(tekst)) {
+    throw new InvoerFout('Dat is geen geldig e-mailadres.');
+  }
+  return tekst;
 }
 
 function optioneleTekst(waarde: unknown): string | undefined {
@@ -202,16 +243,29 @@ function samengesteldeNaam(rij: {
 }
 
 /** Is dit een uniek-schending op (vve_id, code)? Dan een leesbare invoerfout. */
+/**
+ * Drizzle wikkelt driverfouten in een DrizzleQueryError met de oorspronkelijke
+ * pg-fout op `cause`; rechtstreeks gezet kan de fout de code zelf dragen.
+ */
+function pgCodeVan(fout: unknown): unknown {
+  if (typeof fout !== 'object' || fout === null) return undefined;
+  const kandidaat = fout as { code?: unknown; cause?: unknown };
+  if (kandidaat.code !== undefined) return kandidaat.code;
+  return pgCodeVan(kandidaat.cause);
+}
+
 function isUniekConflict(fout: unknown): boolean {
-  // Drizzle wikkelt driverfouten in een DrizzleQueryError met de oorspronkelijke
-  // pg-fout op `cause`; rechtstreeks gezet velt de fout zelf de code dragen.
-  const codeVan = (e: unknown): unknown => {
-    if (typeof e !== 'object' || e === null) return undefined;
-    const kandidaat = e as { code?: unknown; cause?: unknown };
-    if (kandidaat.code !== undefined) return kandidaat.code;
-    return codeVan(kandidaat.cause);
-  };
-  return codeVan(fout) === '23505';
+  return pgCodeVan(fout) === '23505';
+}
+
+/**
+ * `23P01` — exclusion_violation. Op `eigenaarschap` staan twee zulke
+ * constraints (migratie 0010): dezelfde persoon twee keer op dezelfde eenheid
+ * in overlappende perioden, en twee eigenaren met elk 1000‰ tegelijk. Dat
+ * laatste is geen bug maar precies de bedoeling: 200% eigendom bestaat niet.
+ */
+function isOverlapConflict(fout: unknown): boolean {
+  return pgCodeVan(fout) === '23P01';
 }
 
 export function maakEenhedenService(config: EenhedenServiceConfig): EenhedenService {
@@ -438,6 +492,157 @@ export function maakEenhedenService(config: EenhedenServiceConfig): EenhedenServ
           verschil: noemer - somTeller,
         };
       });
+    },
+
+    /**
+     * Geeft een eigenaar toegang tot zijn eenheid: account, rol en koppeling in
+     * één transactie (spec §3.1, §3.3 · AC2.4).
+     *
+     * Drie dingen die los van elkaar al bestonden, maar nooit als één handeling:
+     * de persoon met een wachtwoord (zoals `vve.service` dat voor de beheerder
+     * doet), de `rol_toewijzing` met rol `eigenaar` — die bepaalt sinds de
+     * rechtenmatrix wat hij mag — en de `eigenaarschap`-rij die zegt wélke
+     * eenheid van hem is.
+     *
+     * Bestaat het e-mailadres al, dan wordt die persoon hergebruikt en zijn
+     * wachtwoord vervangen: `persoon.email` is uniek en de historie hangt aan
+     * het id (§3.3). Dat is ook het pad voor "eigenaar is zijn wachtwoord
+     * kwijt" — opnieuw invullen, en een lopende blokkade vervalt.
+     */
+    async maakEigenaarAccount(vveId, eenheidId, velden, doorPersoonId) {
+      const email = geldigEmail(velden.email);
+      const achternaam = verplichteTekst(velden.achternaam, 'achternaam');
+      const voornaam = optioneleTekst(velden.voornaam);
+      const oordeel = beoordeelWachtwoord(velden.wachtwoord);
+      if (!oordeel.ok) throw new InvoerFout(oordeel.redenen.join(' '));
+      const hash = await hashWachtwoord(velden.wachtwoord);
+      // Zonder opgave: het volle aandeel. Een eenheid met één eigenaar is het
+      // normale geval; de beheerder hoeft dan geen promillage te typen.
+      const aandeel = aandeelPromille(velden.aandeelPromille ?? 1000);
+
+      const resultaat = await inTenantTransactie(db, vveId, async (tx) => {
+        // De eenheid moet in déze VvE bestaan; tenantcontrole vóór alles (§7.5).
+        const [eenheid] = await tx
+          .select({ id: wooneenheid.id, code: wooneenheid.code })
+          .from(wooneenheid)
+          .where(and(eq(wooneenheid.id, eenheidId), eq(wooneenheid.vveId, vveId)))
+          .limit(1);
+        if (eenheid === undefined) {
+          throw new NietGevondenFout('Wooneenheid niet gevonden in deze VvE.');
+        }
+
+        const [bestaand] = await tx
+          .select({ id: persoon.id })
+          .from(persoon)
+          .where(eq(persoon.email, email))
+          .limit(1);
+
+        let persoonId: bigint;
+        if (bestaand === undefined) {
+          const [nieuw] = await tx
+            .insert(persoon)
+            .values({
+              email,
+              achternaam,
+              ...(voornaam !== undefined ? { voornaam } : {}),
+              wachtwoordHash: hash,
+              // Eerste inlog dwingt een eigen wachtwoord af: de beheerder heeft
+              // dit er zelf ingezet en kent het dus (§3.3).
+              wachtwoordWijzigenVerplicht: true,
+              actief: true,
+            })
+            .returning({ id: persoon.id });
+          if (nieuw === undefined) throw new Error('Persoon aanmaken leverde geen id op.');
+          persoonId = nieuw.id;
+        } else {
+          persoonId = bestaand.id;
+          await tx
+            .update(persoon)
+            .set({
+              wachtwoordHash: hash,
+              wachtwoordWijzigenVerplicht: true,
+              actief: true,
+              // Een nieuw wachtwoord heft een lopende blokkade op; anders deelt
+              // de beheerder een account uit dat de ontvanger niet in kan.
+              misluktePogingen: 0,
+              geblokkeerdTot: null,
+              gewijzigdOp: klok.nu(),
+            })
+            .where(eq(persoon.id, persoonId));
+        }
+
+        // Rol `eigenaar` in deze VvE, als die er nog niet is. Zonder deze rij
+        // weigert de TenantGuard hem bij zijn eigen portaal.
+        const [rol] = await tx
+          .select({ id: rolToewijzing.id })
+          .from(rolToewijzing)
+          .where(
+            and(
+              eq(rolToewijzing.vveId, vveId),
+              eq(rolToewijzing.persoonId, persoonId),
+              eq(rolToewijzing.rol, 'eigenaar'),
+            ),
+          )
+          .limit(1);
+        if (rol === undefined) {
+          await tx
+            .insert(rolToewijzing)
+            .values({ vveId, persoonId, rol: 'eigenaar', startDatum: vandaag() });
+        }
+
+        // Al eigenaar van déze eenheid op dit moment? Dan niets koppelen: de
+        // exclusion constraint op `periode` (V03) zou de insert toch weigeren.
+        const [alEigenaar] = await tx
+          .select({ id: eigenaarschap.id })
+          .from(eigenaarschap)
+          .where(
+            and(
+              eq(eigenaarschap.wooneenheidId, eenheidId),
+              eq(eigenaarschap.persoonId, persoonId),
+              sql`${eigenaarschap.periode} @> CURRENT_DATE`,
+            ),
+          )
+          .limit(1);
+        if (alEigenaar === undefined) {
+          await tx
+            .insert(eigenaarschap)
+            .values({
+              vveId,
+              wooneenheidId: eenheidId,
+              persoonId,
+              aandeelPromille: aandeel,
+              isPrimairContact: velden.isPrimairContact === true,
+              periode: `[${vandaag()},)`,
+            })
+            .catch((fout: unknown) => {
+              if (isOverlapConflict(fout)) {
+                throw new InvoerFout(
+                  `Deze eenheid heeft al een eigenaar met een aandeel dat geen ruimte laat voor ${String(aandeel)}‰. ` +
+                    'Verlaag het aandeel, of gebruik de eigenaarswissel als de eenheid van eigenaar is veranderd.',
+                );
+              }
+              throw fout;
+            });
+        }
+
+        return {
+          persoonId,
+          bestaandPersoon: bestaand !== undefined,
+          alEigenaar: alEigenaar !== undefined,
+        };
+      });
+
+      await audit.registreer({
+        vveId,
+        persoonId: doorPersoonId,
+        gebeurtenis: 'eigenaar.account_uitgegeven',
+        categorie: 'app',
+        onderwerpTabel: 'persoon',
+        onderwerpId: resultaat.persoonId,
+        // Bewust geen wachtwoord in het auditlog (F12).
+        details: { email, eenheidId: String(eenheidId) },
+      });
+      return resultaat;
     },
 
     async wijzigEenheid(vveId, eenheidId, velden, doorPersoonId) {
