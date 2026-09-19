@@ -187,7 +187,7 @@ describe('Guards en opstarttest (F08, §7.5)', () => {
     // Zonder vve_id (geen VvE-keuze in de sessie):
     await expect(
       guards.tenantGuard.canActivate(
-        maakContext({ persoonId, vveId: null, mfaGeauthenticeerd: false }),
+        maakContext({ persoonId, vveId: null, mfaGeauthenticeerd: false, rollen: [] }),
       ),
     ).rejects.toThrow(/Geen actieve VvE/);
 
@@ -199,6 +199,7 @@ describe('Guards en opstarttest (F08, §7.5)', () => {
           persoonId: andere.persoonId,
           vveId,
           mfaGeauthenticeerd: false,
+          rollen: [],
         }),
       ),
     ).rejects.toThrow(/Geen actieve rol/);
@@ -212,7 +213,7 @@ describe('Guards en opstarttest (F08, §7.5)', () => {
     });
     await expect(
       guards.tenantGuard.canActivate(
-        maakContext({ persoonId: andere.persoonId, vveId, mfaGeauthenticeerd: false }),
+        maakContext({ persoonId: andere.persoonId, vveId, mfaGeauthenticeerd: false, rollen: [] }),
       ),
     ).resolves.toBe(true);
   });
@@ -231,6 +232,7 @@ describe('Guards en opstarttest (F08, §7.5)', () => {
       persoonId,
       vveId,
       mfaGeauthenticeerd: false,
+      rollen: ['beheerder'],
     };
     const maakContext = (): ExecutionContext =>
       ({
@@ -254,6 +256,86 @@ describe('Guards en opstarttest (F08, §7.5)', () => {
         : undefined) as typeof rolGuard.reflector.get;
     await expect(guards.rolGuard.canActivate(maakContext())).rejects.toThrow(/geldstroom/);
 
+    rolGuard.reflector.get = origineelGet;
+  });
+
+  it('RolGuard: een eigenaar komt niet bij een beheerdersrecht (spec §3.1/§3.2)', async () => {
+    if (!db || !config) throw new Error('geen setup');
+    const guards = maakGuards(config);
+    const { persoonId, vveId } = await seed();
+    await db.db.insert(rolToewijzing).values({
+      vveId,
+      persoonId,
+      rol: 'eigenaar',
+      startDatum: '2026-01-01',
+    });
+
+    // Zoals de TenantGuard hem vult: de werkelijke rol uit rol_toewijzing.
+    const inlog: InlogRequestContext = {
+      persoonId,
+      vveId,
+      mfaGeauthenticeerd: false,
+      rollen: ['eigenaar'],
+    };
+    const maakContext = (): ExecutionContext =>
+      ({
+        switchToHttp: () => ({ getRequest: () => ({ inlogContext: inlog }) }),
+        getHandler: () => ({}),
+        getClass: () => ({}),
+      }) as unknown as ExecutionContext;
+
+    const rolGuard = guards.rolGuard as unknown as { reflector: Reflector };
+    const origineelGet = rolGuard.reflector.get.bind(rolGuard.reflector);
+    const metRecht = (recht: string): void => {
+      rolGuard.reflector.get = ((sleutel: string) =>
+        sleutel === VEREIST_RECHT_SLEUTEL ? { recht } : undefined) as typeof rolGuard.reflector.get;
+    };
+
+    // Dit was het gat: de rol werd nooit tegen het recht gehouden, dus een
+    // eigenaar kon eenheden aanmaken in zijn eigen VvE.
+    metRecht('eenheid.aanmaken');
+    await expect(guards.rolGuard.canActivate(maakContext())).rejects.toThrow(/heeft het recht/);
+
+    metRecht('boekjaar.afsluiten');
+    await expect(guards.rolGuard.canActivate(maakContext())).rejects.toThrow(/heeft het recht/);
+
+    // Wat hij wél mag: zijn eigen portaal (V07 filtert daarbinnen op zijn eenheid).
+    metRecht('portaal.lezen');
+    await expect(guards.rolGuard.canActivate(maakContext())).resolves.toBe(true);
+
+    rolGuard.reflector.get = origineelGet;
+  });
+
+  it('RolGuard: de beheerder houdt zijn volledige toegang (spec §3.1)', async () => {
+    if (!db || !config) throw new Error('geen setup');
+    const guards = maakGuards(config);
+    const { persoonId, vveId } = await seed();
+    await db.db.insert(rolToewijzing).values({
+      vveId,
+      persoonId,
+      rol: 'beheerder',
+      startDatum: '2026-01-01',
+    });
+    const inlog: InlogRequestContext = {
+      persoonId,
+      vveId,
+      mfaGeauthenticeerd: false,
+      rollen: ['beheerder'],
+    };
+    const maakContext = (): ExecutionContext =>
+      ({
+        switchToHttp: () => ({ getRequest: () => ({ inlogContext: inlog }) }),
+        getHandler: () => ({}),
+        getClass: () => ({}),
+      }) as unknown as ExecutionContext;
+
+    const rolGuard = guards.rolGuard as unknown as { reflector: Reflector };
+    const origineelGet = rolGuard.reflector.get.bind(rolGuard.reflector);
+    rolGuard.reflector.get = ((sleutel: string) =>
+      sleutel === VEREIST_RECHT_SLEUTEL
+        ? { recht: 'eenheid.aanmaken' }
+        : undefined) as typeof rolGuard.reflector.get;
+    await expect(guards.rolGuard.canActivate(maakContext())).resolves.toBe(true);
     rolGuard.reflector.get = origineelGet;
   });
 

@@ -31,6 +31,7 @@ import { Reflector } from '@nestjs/core';
 import { persoon } from '../../database/schema/persoon.js';
 import { rolToewijzing } from '../../database/schema/rol-toewijzing.js';
 import { VEREIST_RECHT_SLEUTEL } from './vereist-recht.js';
+import { rolHeeftRecht } from './rechten.js';
 import { MfaVereistFout, maakMfaGate, type MfaGate } from './mfa-gate.js';
 import { verifieerAccessToken, type DecodedAccessToken } from './token.js';
 import type { Klok } from '../system-klok.js';
@@ -65,6 +66,12 @@ export interface InlogRequestContext {
   readonly vveId: bigint | null;
   /** Heeft de gebruiker op dit verzoek opnieuw MFA geleverd? (§7.6 herauthenticatie.) */
   readonly mfaGeauthenticeerd: boolean;
+  /**
+   * De rollen die deze persoon in de actieve VvE heeft. De `TenantGuard` vult
+   * ze (hij bevraagt `rol_toewijzing` toch al); de `RolGuard` toetst het
+   * gedeclareerde recht ertegen. Leeg zolang er geen tenantcontext is.
+   */
+  readonly rollen: readonly string[];
 }
 
 interface NestVerzoek {
@@ -122,6 +129,8 @@ export class AuthGuard implements CanActivate {
       persoonId: gecodeerd.persoonId,
       vveId: gecodeerd.vveId,
       mfaGeauthenticeerd: gecodeerd.mfaGeauthenticeerd,
+      // De rollen komen pas uit de TenantGuard; die kent de actieve VvE.
+      rollen: [],
     };
     return true;
   }
@@ -146,16 +155,19 @@ export class TenantGuard implements CanActivate {
       throw alsNestFout(new GuardFout(403, 'Geen actieve VvE in de sessie'));
     }
     // Er moet een rol_toewijzing in die VvE zijn (actief of nog lopend).
+    // Niet alleen dát er een is: wélke, want de RolGuard toetst het
+    // gedeclareerde recht daartegen. Zonder die rollen viel elke rol samen en
+    // kwam een eigenaar bij elk endpoint van zijn VvE.
     const toewijzingen = await this.config.db
-      .select({ id: rolToewijzing.id })
+      .select({ rol: rolToewijzing.rol })
       .from(rolToewijzing)
       .where(
         and(eq(rolToewijzing.vveId, inlog.vveId), eq(rolToewijzing.persoonId, inlog.persoonId)),
-      )
-      .limit(1);
+      );
     if (toewijzingen.length === 0) {
       throw alsNestFout(new GuardFout(403, 'Geen actieve rol in deze VvE'));
     }
+    verzoek.inlogContext = { ...inlog, rollen: toewijzingen.map((rij) => rij.rol) };
     return true;
   }
 }
@@ -189,6 +201,12 @@ export class RolGuard implements CanActivate {
     const inlog = verzoek.inlogContext;
     if (inlog === undefined) {
       throw alsNestFout(new GuardFout(401, 'Auth ontbreekt op deze route'));
+    }
+    // De rol moet het recht werkelijk hebben (§3.2 deny by default). De
+    // TenantGuard heeft de rollen in de context gezet; staat die leeg, dan
+    // draait deze guard buiten een tenantcontext en is er niets te toetsen.
+    if (inlog.rollen.length > 0 && !rolHeeftRecht(inlog.rollen, metadata.recht)) {
+      throw alsNestFout(new GuardFout(403, `Uw rol heeft het recht "${metadata.recht}" niet`));
     }
     // Geldstroomrechten vereisen MFA (§7.6/§8.5, F07-gate).
     if (this.mfaGate.isGeldstroomRecht(metadata.recht) && !inlog.mfaGeauthenticeerd) {
