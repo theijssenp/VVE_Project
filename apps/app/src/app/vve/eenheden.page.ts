@@ -8,13 +8,18 @@
  * ingevoerd.
  *
  * De actieve VvE komt uit het access-token: bij het openen vraagt de
- * AuthService de server om een token met `vve_id`-claim (van de eerste VvE
- * in het profiel), waarna de eenheden-endpoints hun data leveren.
+ * AuthService de server om een token met `vve_id`-claim, waarna de
+ * eenheden-endpoints hun data leveren. Welke VvE dat is, staat in de
+ * query-parameter `vve` die het startscherm meegeeft; ontbreekt die, dan is
+ * het de eerste VvE uit het profiel.
  */
 import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute } from '@angular/router';
 import {
+  IonBackButton,
   IonButton,
+  IonButtons,
   IonCard,
   IonCardContent,
   IonCardHeader,
@@ -49,7 +54,9 @@ function leegInvoer(): EenheidInvoer {
   standalone: true,
   imports: [
     FormsModule,
+    IonBackButton,
     IonButton,
+    IonButtons,
     IonCard,
     IonCardContent,
     IonCardHeader,
@@ -69,9 +76,14 @@ function leegInvoer(): EenheidInvoer {
     IonToolbar,
   ],
   template: `
-    <ion-header
-      ><ion-toolbar><ion-title>Wooneenheden</ion-title></ion-toolbar></ion-header
-    >
+    <ion-header>
+      <ion-toolbar>
+        <ion-buttons slot="start"
+          ><ion-back-button defaultHref="/vve"></ion-back-button
+        ></ion-buttons>
+        <ion-title>Wooneenheden</ion-title>
+      </ion-toolbar>
+    </ion-header>
     <ion-content class="ion-padding">
       @if (fout(); as f) {
         <ion-text color="danger"
@@ -194,6 +206,7 @@ function leegInvoer(): EenheidInvoer {
 export class EenhedenPage {
   readonly #auth = inject(AuthService);
   readonly #service = inject(EenhedenService);
+  readonly #route = inject(ActivatedRoute);
 
   readonly overzicht = signal<EenhedenOverzicht | null>(null);
   readonly fout = signal<ApiFout | null>(null);
@@ -210,7 +223,16 @@ export class EenhedenPage {
   async laad(): Promise<void> {
     this.bezig.set(true);
     try {
-      await this.#auth.kiesActieveVveVanEerste();
+      // Welke VvE hier bewerkt wordt, staat in de query (`?vve=`) — het
+      // startscherm geeft hem mee vanaf de aangeklikte kaart. Zonder parameter
+      // (iemand die de URL rechtstreeks intypt) valt het terug op de eerste
+      // VvE uit het profiel; bij één VvE is dat hetzelfde.
+      const gekozen = this.#route.snapshot.queryParamMap.get('vve');
+      if (gekozen === null) {
+        await this.#auth.kiesActieveVveVanEerste();
+      } else {
+        await this.#auth.kiesActieveVve(gekozen);
+      }
       this.overzicht.set(await this.#service.lijst());
     } catch (e) {
       this.fout.set(e as ApiFout);

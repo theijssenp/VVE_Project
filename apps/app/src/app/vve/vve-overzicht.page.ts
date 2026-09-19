@@ -109,6 +109,10 @@ const MAANDEN = [
                 actief te maken.
               </ion-note>
             }
+
+            <ion-button expand="block" routerLink="/vve/eenheden" [queryParams]="{ vve: v.vveId }">
+              Wooneenheden
+            </ion-button>
           </ion-card-content>
         </ion-card>
       } @empty {
